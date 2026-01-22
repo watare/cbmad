@@ -216,14 +216,21 @@ function getPlanningDoc(db, input) {
 }
 
 function updatePlanningDoc(db, input) {
-  const { project_id, type, content, generate_summary } = input;
+  const { project_id, type, content, generate_summary, precondition_updated_at } = input;
   const id = `${project_id}:${type}`;
   const summary = generate_summary ? (content.slice(0, 800) + (content.length > 800 ? '...': '')) : null;
+  if (precondition_updated_at) {
+    const cur = db.prepare('SELECT updated_at FROM planning_docs WHERE id=?').get(id);
+    if (cur && String(cur.updated_at) !== String(precondition_updated_at)) {
+      return { success: false, conflict: true, current_updated_at: cur.updated_at };
+    }
+  }
   db.prepare(`INSERT INTO planning_docs (id, project_id, type, content, summary)
               VALUES (?,?,?,?,?)
               ON CONFLICT(id) DO UPDATE SET content=excluded.content, summary=COALESCE(excluded.summary, planning_docs.summary), updated_at=CURRENT_TIMESTAMP`)
     .run(id, project_id, type, content, summary);
-  return { success: true };
+  const updated = db.prepare('SELECT updated_at FROM planning_docs WHERE id=?').get(id);
+  return { success: true, updated_at: updated?.updated_at };
 }
 
 // ---------- Sprint & Workflow ----------
@@ -588,9 +595,15 @@ module.exports.searchStories = searchStories;
 
 // ---------- Story Admin ----------
 function updateStory(db, input) {
-  const { story_id, title, description, epic_number, status } = input;
+  const { story_id, title, description, epic_number, status, precondition_updated_at } = input;
   const s = db.prepare('SELECT project_id FROM stories WHERE id=?').get(story_id);
   if (!s) throw new Error('Story not found');
+  if (precondition_updated_at) {
+    const cur = db.prepare('SELECT updated_at FROM stories WHERE id=?').get(story_id);
+    if (cur && String(cur.updated_at) !== String(precondition_updated_at)) {
+      return { success: false, conflict: true, current_updated_at: cur.updated_at };
+    }
+  }
   let epicId = null;
   if (epic_number != null) {
     const e = db.prepare('SELECT id FROM epics WHERE project_id=? AND number=?').get(s.project_id, epic_number);
@@ -606,7 +619,8 @@ function updateStory(db, input) {
   if (!fields.length) return { success: true };
   vals.push(story_id);
   db.prepare(`UPDATE stories SET ${fields.join(', ')}, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...vals);
-  return { success: true };
+  const updated = db.prepare('SELECT updated_at FROM stories WHERE id=?').get(story_id);
+  return { success: true, updated_at: updated?.updated_at };
 }
 
 function deleteStory(db, input) {
@@ -1459,3 +1473,205 @@ function getProjectStatus(db, input) {
 }
 
 module.exports.getProjectStatus = getProjectStatus;
+
+// ---------- Retrospective ----------
+function retroLog(db, input) {
+  const { project_id, epic_number, content } = input;
+  const epicInfo = epic_number != null ? ` [epic ${epic_number}]` : '';
+  const entry = `[RETRO${epicInfo}] ${content}`;
+  db.prepare('INSERT INTO logs (project_id, story_id, type, content) VALUES (?,?,?,?)')
+    .run(project_id, null, 'retro', entry);
+  return { success: true };
+}
+
+// ---------- Diagram stubs (Excalidraw-friendly placeholders) ----------
+function createDiagramDoc(db, input, kind) {
+  const { project_id, title, content } = input;
+  const docTitle = title || `${kind} diagram`;
+  const body = content || `# ${docTitle}\n\nThis is a placeholder for a ${kind} diagram.\n\n- Tool: Excalidraw\n- Export: add .excalidraw file alongside when available.`;
+  const tags = `diagram,${kind},excalidraw`;
+  db.prepare(`INSERT INTO documents (project_id, path, type, tags, content, summary)
+              VALUES (?,?,?,?,?,?)
+              ON CONFLICT(project_id, path) DO UPDATE SET type=excluded.type, tags=excluded.tags, content=excluded.content, summary=excluded.summary, updated_at=CURRENT_TIMESTAMP`)
+    .run(project_id, `planning/diagrams/${kind}-${Date.now()}.md`, 'diagram', tags, body, summarize(body, 400));
+  return { success: true };
+}
+
+function createDataflow(db, input) { return createDiagramDoc(db, input, 'dataflow'); }
+function createDiagram(db, input) { return createDiagramDoc(db, input, 'diagram'); }
+function createFlowchart(db, input) { return createDiagramDoc(db, input, 'flowchart'); }
+function createWireframe(db, input) { return createDiagramDoc(db, input, 'wireframe'); }
+
+// ---------- Sprint Planning Generation (basic) ----------
+function sprintPlanningGenerate(db, input) {
+  const { project_id, epic_numbers, current_sprint } = input;
+  if (current_sprint) {
+    db.prepare(`INSERT INTO sprint_status (project_id, current_sprint, status_data, updated_at)
+                VALUES (?,?,NULL,CURRENT_TIMESTAMP)
+                ON CONFLICT(project_id) DO UPDATE SET current_sprint=excluded.current_sprint, updated_at=CURRENT_TIMESTAMP`)
+      .run(project_id, current_sprint);
+  }
+  // Build a basic plan of candidate stories: ready-for-dev or draft under selected epics (if provided)
+  let sql = `SELECT s.key, s.title, s.status, e.number AS epic_number
+             FROM stories s LEFT JOIN epics e ON s.epic_id=e.id
+             WHERE s.project_id=?`;
+  const params = [project_id];
+  if (epic_numbers && epic_numbers.length) {
+    sql += ` AND e.number IN (${epic_numbers.map(()=>'?').join(',')})`;
+    params.push(...epic_numbers);
+  }
+  sql += ` AND s.status IN ('ready-for-dev','draft') ORDER BY e.number ASC, s.key ASC`;
+  const rows = db.prepare(sql).all(...params);
+  const plan = { generated_at: new Date().toISOString(), stories: rows };
+  db.prepare(`INSERT INTO sprint_status (project_id, current_sprint, status_data, updated_at)
+              VALUES (?,?,?,CURRENT_TIMESTAMP)
+              ON CONFLICT(project_id) DO UPDATE SET status_data=excluded.status_data, updated_at=CURRENT_TIMESTAMP`)
+    .run(project_id, current_sprint || null, JSON.stringify(plan));
+  return { success: true, plan };
+}
+
+module.exports.retroLog = retroLog;
+module.exports.createDataflow = createDataflow;
+module.exports.createDiagram = createDiagram;
+module.exports.createFlowchart = createFlowchart;
+module.exports.createWireframe = createWireframe;
+module.exports.sprintPlanningGenerate = sprintPlanningGenerate;
+
+// ---------- Workflow Init (composite convenience) ----------
+function workflowInit(db, input) {
+  const { project_id, name, root_path, current_sprint, scan_docs = true, seed = {} } = input;
+  if (!project_id) throw new Error('project_id required');
+  if (root_path) registerProject(db, { id: project_id, name: name || project_id, root_path, config: {} });
+  if (current_sprint) setCurrentSprint(db, { project_id, current_sprint });
+  const actions = [];
+  if (scan_docs) { scanDocuments(db, { project_id, root_path }); actions.push('docs_scanned'); }
+  if (seed.prd) { updatePlanningDoc(db, { project_id, type: 'prd', content: seed.prd, generate_summary: true }); actions.push('prd_seeded'); }
+  if (seed.architecture) { updatePlanningDoc(db, { project_id, type: 'architecture', content: seed.architecture, generate_summary: true }); actions.push('arch_seeded'); }
+  if (seed.ux) { updatePlanningDoc(db, { project_id, type: 'ux', content: seed.ux, generate_summary: true }); actions.push('ux_seeded'); }
+  const status = getProjectStatus(db, { project_id });
+  return { success: true, actions, status };
+}
+
+module.exports.workflowInit = workflowInit;
+
+// ---------- BMAD-METHOD Workflows Installation & Runner ----------
+function copyDir(src, dst) {
+  ensureDir(dst);
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const sp = path.join(src, entry.name);
+    const dp = path.join(dst, entry.name);
+    if (entry.isDirectory()) copyDir(sp, dp);
+    else fs.copyFileSync(sp, dp);
+  }
+}
+
+function installBmadMethod(db, input) {
+  const { project_id, root_path, ref = 'main', target = 'project' } = input;
+  let root = root_path;
+  if (!root) {
+    const r = db.prepare('SELECT root_path FROM projects WHERE id=?').get(project_id);
+    if (!r) throw new Error('Project not found');
+    root = r.root_path;
+  }
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir?.() || '/tmp', 'bmad-method-'));
+  try {
+    cp.execFileSync('git', ['clone', '--depth', '1', '--branch', ref, 'https://github.com/bmad-code-org/BMAD-METHOD', tmp], { stdio: 'inherit' });
+  } catch (e) {
+    throw new Error('Git clone failed: ' + e.message);
+  }
+  const srcBmm = path.join(tmp, 'src', 'bmm');
+  const dstBmm = target === 'project' ? path.join(root, '_bmad', 'bmm') : path.join(os.homedir(), '.config', 'bmad-server', 'bmm');
+  ensureDir(dstBmm);
+  // Copy workflows and supporting files
+  const srcWorkflows = path.join(srcBmm, 'workflows');
+  const dstWorkflows = path.join(dstBmm, 'workflows');
+  copyDir(srcWorkflows, dstWorkflows);
+  // module-help.csv for mapping
+  const moduleHelp = path.join(srcBmm, 'module-help.csv');
+  if (fs.existsSync(moduleHelp)) {
+    fs.copyFileSync(moduleHelp, path.join(dstBmm, 'module-help.csv'));
+  }
+  return { success: true, installed_path: dstBmm };
+}
+
+function parseCsv(line) {
+  const out = [];
+  let cur = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = false;
+      } else cur += ch;
+    } else {
+      if (ch === ',') { out.push(cur); cur = ''; }
+      else if (ch === '"') inQ = true;
+      else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+function listWorkflows(db, input) {
+  const { project_id, target = 'project' } = input;
+  const root = target === 'project'
+    ? (db.prepare('SELECT root_path FROM projects WHERE id=?').get(project_id)?.root_path)
+    : path.join(os.homedir(), '.config', 'bmad-server');
+  if (!root) throw new Error('Project not found');
+  const csvPath = target === 'project'
+    ? path.join(root, '_bmad', 'bmm', 'module-help.csv')
+    : path.join(root, 'bmm', 'module-help.csv');
+  if (!fs.existsSync(csvPath)) return { workflows: [] };
+  const lines = fs.readFileSync(csvPath, 'utf8').split(/\r?\n/).filter(Boolean);
+  const head = lines.shift();
+  const workflows = [];
+  for (const ln of lines) {
+    const cols = parseCsv(ln);
+    const [module, phase, name, code, seq, wfFile, command, required, agent, options, description] = cols;
+    workflows.push({ module, phase, name, code, seq: Number(seq || 0), workflow_file: wfFile, command, required: String(required||'').toLowerCase()==='true', agent, options, description });
+  }
+  return { workflows };
+}
+
+function resolveWorkflowPath(db, project_id, wfFile, target) {
+  const root = target === 'project'
+    ? (db.prepare('SELECT root_path FROM projects WHERE id=?').get(project_id)?.root_path)
+    : path.join(os.homedir(), '.config', 'bmad-server');
+  if (!root) throw new Error('Project not found');
+  const base = target === 'project' ? path.join(root, '_bmad', 'bmm') : path.join(root, 'bmm');
+  return path.join(base, 'workflows', wfFile.replace(/^.*workflows\//, ''));
+}
+
+function openWorkflow(db, input) {
+  const { project_id, code, target = 'project' } = input;
+  const lw = listWorkflows(db, { project_id, target });
+  const wf = lw.workflows.find(w => w.command === code || w.code === code);
+  if (!wf) return { found: false };
+  const fullPath = resolveWorkflowPath(db, project_id, wf.workflow_file, target);
+  if (!fs.existsSync(fullPath)) return { found: false };
+  const content = fs.readFileSync(fullPath, 'utf8');
+  return { found: true, workflow: { ...wf, path: fullPath, content } };
+}
+
+function nextStep(db, input) {
+  const { project_id, code, cursor = 0, target = 'project' } = input;
+  const ow = openWorkflow(db, { project_id, code, target });
+  if (!ow.found) return { found: false };
+  const content = ow.workflow.content;
+  // simple splitter: sections by level-2 headers
+  const sections = content.split(/\n##\s+/).filter(Boolean);
+  const idx = Math.min(Math.max(0, cursor), sections.length - 1);
+  const titlePlus = sections[idx];
+  const title = titlePlus.split('\n',1)[0].trim();
+  const body = titlePlus.slice(title.length).trim();
+  const hasNext = idx < sections.length - 1;
+  return { found: true, step: { index: idx, title, body }, has_next: hasNext };
+}
+
+module.exports.installBmadMethod = installBmadMethod;
+module.exports.listWorkflows = listWorkflows;
+module.exports.openWorkflow = openWorkflow;
+module.exports.nextStep = nextStep;

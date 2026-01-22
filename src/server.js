@@ -9,6 +9,7 @@ const fs = require('fs');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const z = require('zod');
+const Types = require('@modelcontextprotocol/sdk/types');
 
 const tools = require('./tools');
 const SCHEMA = require('./schema');
@@ -75,6 +76,50 @@ async function main() {
 
   mcp.registerTool('bmad.get_project_context', { description: 'Get project summary context', inputSchema: anyArgs }, withDb((db, input) => tools.getProjectContext(db, input)));
   mcp.registerTool('bmad.get_project_status', { description: 'Composite project status (context + sprint + discovery + flags)', inputSchema: anyArgs }, withDb((db, input) => tools.getProjectStatus(db, input)));
+  mcp.registerTool('bmad.workflow_init', { description: 'Initialize project (register, sprint, docs, seed PRD/Arch/UX)', inputSchema: anyArgs }, withDb((db, input) => tools.workflowInit(db, input)));
+  // BMAD-METHOD installer & runner
+  mcp.registerTool('bmad.install_bmad_method', { description: 'Install BMAD-METHOD workflows into project', inputSchema: anyArgs }, withDb((db, input) => tools.installBmadMethod(db, input)));
+  mcp.registerTool('bmad.list_workflows', { description: 'List BMAD workflows (from module-help.csv)', inputSchema: anyArgs }, withDb((db, input) => tools.listWorkflows(db, input)));
+  mcp.registerTool('bmad.open_workflow', { description: 'Open a workflow by code', inputSchema: anyArgs }, withDb((db, input) => tools.openWorkflow(db, input)));
+  mcp.registerTool('bmad.next_step', { description: 'Get next workflow step by index (simple splitter)', inputSchema: anyArgs }, withDb((db, input) => tools.nextStep(db, input)));
+
+  // MCP Resources: expose installed workflows for browsing
+  try {
+    mcp.server.registerCapabilities({ resources: { listChanged: true } });
+    mcp.server.setRequestHandler(Types.ListResourcesRequestSchema, (request) => {
+      // List workflow files as resources under bmad://workflows/
+      const items = [];
+      const home = os.homedir();
+      const globalBase = path.join(home, '.config', 'bmad-server', 'bmm', 'workflows');
+      function walk(root, baseUri) {
+        if (!fs.existsSync(root)) return;
+        for (const dirent of fs.readdirSync(root, { withFileTypes: true })) {
+          const p = path.join(root, dirent.name);
+          if (dirent.isDirectory()) walk(p, baseUri + '/' + dirent.name);
+          else {
+            const ext = path.extname(dirent.name).toLowerCase();
+            const mime = ext === '.md' ? 'text/markdown' : (ext === '.yaml' || ext === '.yml' ? 'text/yaml' : 'text/plain');
+            items.push({ uri: `bmad://workflows${baseUri}/${dirent.name}`, name: dirent.name, mimeType: mime, description: 'BMAD workflow asset' });
+          }
+        }
+      }
+      walk(globalBase, '');
+      return { resources: items };
+    });
+    mcp.server.setRequestHandler(Types.ReadResourceRequestSchema, (request) => {
+      const uri = request.params.uri || '';
+      if (!uri.startsWith('bmad://workflows')) throw new Error('Unsupported URI');
+      const rel = uri.replace('bmad://workflows', '');
+      const p = path.join(os.homedir(), '.config', 'bmad-server', 'bmm', 'workflows', rel);
+      if (!fs.existsSync(p)) throw new Error('Not found');
+      const ext = path.extname(p).toLowerCase();
+      const mime = ext === '.md' ? 'text/markdown' : (ext === '.yaml' || ext === '.yml' ? 'text/yaml' : 'text/plain');
+      const text = fs.readFileSync(p, 'utf8');
+      return { contents: [{ uri, mimeType: mime, text }] };
+    });
+  } catch (e) {
+    if (mcp?.server && logLevel !== 'silent') console.error('[bmad-mcp] resources capability not available:', e.message);
+  }
 
   // Story Management
   mcp.registerTool('bmad.get_next_story', { description: 'Get the next story to develop', inputSchema: anyArgs }, withDb((db, input) => tools.getNextStory(db, input)));
@@ -203,6 +248,8 @@ async function main() {
   mcp.registerTool('bmad.update_readiness_item', { description: 'Update a readiness checklist item', inputSchema: anyArgs }, withDb((db, input) => tools.updateReadinessItem(db, input)));
   mcp.registerTool('bmad.get_readiness_status', { description: 'Get readiness status', inputSchema: anyArgs }, withDb((db, input) => tools.getReadinessStatus(db, input)));
   mcp.registerTool('bmad.finalize_readiness', { description: 'Finalize readiness and set status', inputSchema: anyArgs }, withDb((db, input) => tools.finalizeReadiness(db, input)));
+  // Retrospective
+  mcp.registerTool('bmad.retro_log', { description: 'Log a retrospective entry', inputSchema: anyArgs }, withDb((db, input) => tools.retroLog(db, input)));
   // Review fix
   mcp.registerTool('bmad.get_review_backlog', { description: 'List pending review follow-up items', inputSchema: anyArgs }, withDb((db, input) => tools.getReviewBacklog(db, input)));
   mcp.registerTool('bmad.complete_review_item', { description: 'Complete a review follow-up item', inputSchema: anyArgs }, withDb((db, input) => tools.completeReviewItem(db, input)));
@@ -223,6 +270,13 @@ async function main() {
   mcp.registerTool('bmad.list_components', { description: 'List registered components', inputSchema: anyArgs }, withDb((db, input) => tools.listComponents(db, input)));
   mcp.registerTool('bmad.export_component', { description: 'Export component files and docs', inputSchema: anyArgs }, withDb((db, input) => tools.exportComponent(db, input)));
   mcp.registerTool('bmad.commit_component', { description: 'Commit component to central repository', inputSchema: anyArgs }, withDb((db, input) => tools.commitComponent(db, input)));
+  // Diagram stubs (Excalidraw helpers)
+  mcp.registerTool('bmad.create_dataflow', { description: 'Create a dataflow diagram stub', inputSchema: anyArgs }, withDb((db, input) => tools.createDataflow(db, input)));
+  mcp.registerTool('bmad.create_diagram', { description: 'Create a general diagram stub', inputSchema: anyArgs }, withDb((db, input) => tools.createDiagram(db, input)));
+  mcp.registerTool('bmad.create_flowchart', { description: 'Create a flowchart stub', inputSchema: anyArgs }, withDb((db, input) => tools.createFlowchart(db, input)));
+  mcp.registerTool('bmad.create_wireframe', { description: 'Create a wireframe stub', inputSchema: anyArgs }, withDb((db, input) => tools.createWireframe(db, input)));
+  // Sprint planning generation
+  mcp.registerTool('bmad.sprint_planning_generate', { description: 'Generate a basic sprint plan from backlog', inputSchema: anyArgs }, withDb((db, input) => tools.sprintPlanningGenerate(db, input)));
 
   const transport = new StdioServerTransport();
   await mcp.connect(transport);

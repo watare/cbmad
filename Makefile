@@ -1,7 +1,7 @@
 PREFIX ?= $(HOME)/.config/bmad-server
 LOCALBIN ?= $(HOME)/.local/bin
 
-.PHONY: install install-local uninstall db-backup db-vacuum claude-md schema cli-link
+.PHONY: install install-local uninstall db-backup db-vacuum claude-md schema cli-link update-claude-md
 
 install: install-local claude-md schema cli-link
 	@echo "BMAD MCP installed. Run: bmad-mcp doctor"
@@ -23,6 +23,14 @@ claude-md:
 	@# Ensure commands section exists (idempotent simple check)
 	@grep -q "Commandes /bmad" $(HOME)/.claude/CLAUDE.md || \
 	  echo "\n## Commandes /bmad (rétro‑compatibles)\n(voir README du serveur, les commandes sont mappées vers bmad.*)" >> $(HOME)/.claude/CLAUDE.md
+
+update-claude-md:
+	mkdir -p $(HOME)/.claude
+	@if [ -f $(HOME)/.claude/CLAUDE.md ]; then cp $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/CLAUDE.md.bak-`date +%s`; fi
+	cp -f templates/CLAUDE.md $(HOME)/.claude/CLAUDE.md
+	@# Append agent prompts if present
+	@if [ -f templates/agents/pm.md ]; then echo "\n\n" >> $(HOME)/.claude/CLAUDE.md; cat templates/agents/pm.md >> $(HOME)/.claude/CLAUDE.md; fi
+	@echo "Updated $(HOME)/.claude/CLAUDE.md (backup with .bak-*)."
 
 schema:
 	@# Generate MCP schema bundle without starting server
