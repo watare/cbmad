@@ -3,6 +3,25 @@
 ### Résumé
 - Serveur MCP Node.js centralisé (SQLite) pour exécuter la méthode BMAD sans recharger le framework dans le contexte du LLM.
 - Expose des tools `bmad.*` (MCP) pour piloter tous les workflows (dev, review, planning, discovery, QA, versionning, etc.).
+
+## Quick Start
+
+```bash
+# 0) Pré‑requis: Node >= 18, repo Git initialisé dans votre projet
+
+# 1) Installer le serveur MCP (dans ce repo)
+npm install
+make install
+bmad-mcp doctor
+
+# 2) Initialiser un projet (dans le dossier du projet)
+bmad-mcp project-init     # écrit/écrase bmad.config.yaml (+ backup) et prépare _bmad-output/
+bmad-mcp register-project # enregistre/actualise le projet dans la DB (idempotent)
+
+# 3) Ouvrir Claude dans le dossier du projet
+#    Vérifier /mcp puis lancer vos workflows /bmad (ex: /bmad.dev-story)
+```
+
 - Exports Markdown pour lecture humaine (non source de vérité), générés à la demande dans `project/_bmad-output/`.
 
 ### Architecture
