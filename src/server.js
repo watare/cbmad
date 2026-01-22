@@ -6,10 +6,10 @@
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
+const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
+const z = require('zod');
 
-const { getDb, migrate } = require('./store/db');
 const tools = require('./tools');
 const SCHEMA = require('./schema');
 
@@ -37,198 +37,77 @@ async function main() {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   fs.mkdirSync(exportDir, { recursive: true });
 
-  const db = getDb(dbPath);
-  migrate(db);
-
-  const server = new Server({
-    name: 'bmad-mcp-server',
-    version: '0.1.0',
-  });
-
-  // Register tools
-  const register = (name, handler, inputSchema, description) => {
-    server.tool(name, handler, { inputSchema, description });
+  const mcp = new McpServer({ name: 'bmad-mcp-server', version: '0.1.0' });
+  const anyArgs = z.object({}).passthrough();
+  const wrap = (result) => ({ content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] });
+  const withDb = (fn) => async (args, extra) => {
+    let db;
+    try {
+      const { getDb, migrate } = require('./store/db');
+      db = getDb(dbPath);
+      migrate(db);
+    } catch (e) {
+      return wrap({ success: false, error: 'DB initialization failed', detail: String(e && e.message || e) });
+    }
+    try {
+      const out = await fn(db, args, extra);
+      return wrap(out);
+    } catch (e) {
+      return wrap({ success: false, error: String(e && e.message || e) });
+    }
   };
 
   // Project Management
-  register('bmad.register_project', (input) => tools.registerProject(db, input), {
-    type: 'object',
-    required: ['id', 'name', 'root_path'],
-    properties: {
-      id: { type: 'string' },
-      name: { type: 'string' },
-      root_path: { type: 'string' },
-      config: { type: 'object', additionalProperties: true }
-    }
-  }, 'Register or update a BMAD project');
+  mcp.registerTool('bmad.register_project', { description: 'Register or update a BMAD project', inputSchema: anyArgs }, withDb((db, input) => tools.registerProject(db, input)));
 
-  register('bmad.get_project_context', (input) => tools.getProjectContext(db, input), {
-    type: 'object', required: ['project_id'], properties: { project_id: { type: 'string' } }
-  }, 'Get project summary context');
+  mcp.registerTool('bmad.get_project_context', { description: 'Get project summary context', inputSchema: anyArgs }, withDb((db, input) => tools.getProjectContext(db, input)));
 
   // Story Management
-  register('bmad.get_next_story', (input) => tools.getNextStory(db, input), {
-    type: 'object', required: ['project_id'], properties: {
-      project_id: { type: 'string' },
-      status_filter: { enum: ['ready-for-dev', 'in-progress'] }
-    }
-  }, 'Get the next story to develop');
+  mcp.registerTool('bmad.get_next_story', { description: 'Get the next story to develop', inputSchema: anyArgs }, withDb((db, input) => tools.getNextStory(db, input)));
 
-  register('bmad.get_story_context', (input) => tools.getStoryContext(db, input), {
-    type: 'object', required: ['story_id'], properties: {
-      story_id: { type: 'string' },
-      include: {
-        type: 'array', items: { enum: ['tasks', 'acceptance_criteria', 'dev_notes', 'files', 'changelog'] }
-      }
-    }
-  }, 'Get full story context');
+  mcp.registerTool('bmad.get_story_context', { description: 'Get full story context', inputSchema: anyArgs }, withDb((db, input) => tools.getStoryContext(db, input)));
 
-  register('bmad.get_story_summary', (input) => tools.getStorySummary(db, input), {
-    type: 'object', required: ['story_id'], properties: { story_id: { type: 'string' } }
-  }, 'Get condensed story summary');
+  mcp.registerTool('bmad.get_story_summary', { description: 'Get condensed story summary', inputSchema: anyArgs }, withDb((db, input) => tools.getStorySummary(db, input)));
 
-  register('bmad.create_story', (input) => tools.createStory(db, input), {
-    type: 'object',
-    required: ['project_id', 'epic_number', 'key', 'title', 'acceptance_criteria', 'tasks'],
-    properties: {
-      project_id: { type: 'string' },
-      epic_number: { type: 'number' },
-      key: { type: 'string' },
-      title: { type: 'string' },
-      description: { type: 'string' },
-      acceptance_criteria: { type: 'array', items: { type: 'string' } },
-      tasks: { type: 'array', items: {
-        type: 'object', required: ['description'], properties: {
-          description: { type: 'string' },
-          subtasks: { type: 'array', items: { type: 'string' } }
-        }
-      }},
-      dev_notes: { type: 'string' }
-    }
-  }, 'Create a new story');
+  mcp.registerTool('bmad.create_story', { description: 'Create a new story', inputSchema: anyArgs }, withDb((db, input) => tools.createStory(db, input)));
 
-  register('bmad.update_story_status', (input) => tools.updateStoryStatus(db, input), {
-    type: 'object', required: ['story_id', 'status'], properties: {
-      story_id: { type: 'string' },
-      status: { enum: ['draft', 'ready-for-dev', 'in-progress', 'review', 'done', 'blocked'] },
-      reason: { type: 'string' }
-    }
-  }, 'Update story status');
+  mcp.registerTool('bmad.update_story_status', { description: 'Update story status', inputSchema: anyArgs }, withDb((db, input) => tools.updateStoryStatus(db, input)));
 
   // Task Management
-  register('bmad.complete_task', (input) => tools.completeTask(db, input), {
-    type: 'object', required: ['story_id', 'task_idx'], properties: {
-      story_id: { type: 'string' },
-      task_idx: { type: 'number' },
-      subtask_idx: { type: 'number' },
-      completion_note: { type: 'string' }
-    }
-  }, 'Mark a task or subtask as completed');
+  mcp.registerTool('bmad.complete_task', { description: 'Mark a task or subtask as completed', inputSchema: anyArgs }, withDb((db, input) => tools.completeTask(db, input)));
 
-  register('bmad.add_review_tasks', (input) => tools.addReviewTasks(db, input), {
-    type: 'object', required: ['story_id', 'tasks'], properties: {
-      story_id: { type: 'string' },
-      tasks: { type: 'array', items: {
-        type: 'object', required: ['description', 'severity'], properties: {
-          description: { type: 'string' },
-          severity: { enum: ['high', 'medium', 'low'] },
-          related_file: { type: 'string' }
-        }
-      }}
-    }
-  }, 'Add review follow-up tasks');
+  mcp.registerTool('bmad.add_review_tasks', { description: 'Add review follow-up tasks', inputSchema: anyArgs }, withDb((db, input) => tools.addReviewTasks(db, input)));
 
   // Dev Notes & Files
-  register('bmad.add_dev_note', (input) => tools.addDevNote(db, input), {
-    type: 'object', required: ['story_id', 'note'], properties: {
-      story_id: { type: 'string' },
-      note: { type: 'string' },
-      section: { enum: ['implementation', 'decisions', 'issues', 'general'] }
-    }
-  }, 'Append development note');
+  mcp.registerTool('bmad.add_dev_note', { description: 'Append development note', inputSchema: anyArgs }, withDb((db, input) => tools.addDevNote(db, input)));
 
-  register('bmad.register_files', (input) => tools.registerFiles(db, input), {
-    type: 'object', required: ['story_id', 'files'], properties: {
-      story_id: { type: 'string' },
-      files: { type: 'array', items: {
-        type: 'object', required: ['path', 'change_type'], properties: {
-          path: { type: 'string' },
-          change_type: { enum: ['added', 'modified', 'deleted'] }
-        }
-      }}
-    }
-  }, 'Register changed files under a story');
+  mcp.registerTool('bmad.register_files', { description: 'Register changed files under a story', inputSchema: anyArgs }, withDb((db, input) => tools.registerFiles(db, input)));
 
-  register('bmad.add_changelog_entry', (input) => tools.addChangelogEntry(db, input), {
-    type: 'object', required: ['story_id', 'entry'], properties: {
-      story_id: { type: 'string' },
-      entry: { type: 'string' }
-    }
-  }, 'Append a changelog entry');
+  mcp.registerTool('bmad.add_changelog_entry', { description: 'Append a changelog entry', inputSchema: anyArgs }, withDb((db, input) => tools.addChangelogEntry(db, input)));
 
   // Planning Documents
-  register('bmad.get_planning_doc', (input) => tools.getPlanningDoc(db, input), {
-    type: 'object', required: ['project_id', 'type', 'format'], properties: {
-      project_id: { type: 'string' },
-      type: { enum: ['prd', 'architecture', 'epics', 'ux'] },
-      format: { enum: ['summary', 'full'] }
-    }
-  }, 'Fetch planning doc');
+  mcp.registerTool('bmad.get_planning_doc', { description: 'Fetch planning doc', inputSchema: anyArgs }, withDb((db, input) => tools.getPlanningDoc(db, input)));
 
-  register('bmad.update_planning_doc', (input) => tools.updatePlanningDoc(db, input), {
-    type: 'object', required: ['project_id', 'type', 'content'], properties: {
-      project_id: { type: 'string' },
-      type: { enum: ['prd', 'architecture', 'epics', 'ux'] },
-      content: { type: 'string' },
-      generate_summary: { type: 'boolean' }
-    }
-  }, 'Update planning doc');
+  mcp.registerTool('bmad.update_planning_doc', { description: 'Update planning doc', inputSchema: anyArgs }, withDb((db, input) => tools.updatePlanningDoc(db, input)));
 
   // Sprint & Workflow
-  register('bmad.get_sprint_status', (input) => tools.getSprintStatus(db, input), {
-    type: 'object', required: ['project_id'], properties: { project_id: { type: 'string' } }
-  }, 'Get sprint status');
+  mcp.registerTool('bmad.get_sprint_status', { description: 'Get sprint status', inputSchema: anyArgs }, withDb((db, input) => tools.getSprintStatus(db, input)));
 
-  register('bmad.log_action', (input) => tools.logAction(db, input), {
-    type: 'object', required: ['project_id', 'type', 'content'], properties: {
-      project_id: { type: 'string' },
-      story_id: { type: 'string' },
-      type: { enum: ['dev', 'review', 'fix', 'create', 'pr'] },
-      content: { type: 'string' }
-    }
-  }, 'Log orchestration action');
+  mcp.registerTool('bmad.log_action', { description: 'Log orchestration action', inputSchema: anyArgs }, withDb((db, input) => tools.logAction(db, input)));
 
   // Export
-  register('bmad.export_story_md', (input) => tools.exportStoryMd(db, input, { exportDir }), {
-    type: 'object', required: ['story_id'], properties: {
-      story_id: { type: 'string' },
-      output_path: { type: 'string' }
-    }
-  }, 'Export a story to Markdown');
+  mcp.registerTool('bmad.export_story_md', { description: 'Export a story to Markdown', inputSchema: anyArgs }, withDb((db, input) => tools.exportStoryMd(db, input, { exportDir })));
 
-  register('bmad.export_project_md', (input) => tools.exportProjectMd(db, input, { exportDir }), {
-    type: 'object', required: ['project_id'], properties: {
-      project_id: { type: 'string' },
-      output_dir: { type: 'string' }
-    }
-  }, 'Export the project to Markdown files');
+  mcp.registerTool('bmad.export_project_md', { description: 'Export the project to Markdown files', inputSchema: anyArgs }, withDb((db, input) => tools.exportProjectMd(db, input, { exportDir })));
 
   // Import
-  register('bmad.import_project', (input) => tools.importProject(db, input), {
-    type: 'object', required: ['project_id', 'root_path'], properties: {
-      project_id: { type: 'string' },
-      root_path: { type: 'string' },
-      bmad_output_path: { type: 'string' }
-    }
-  }, 'Import a legacy BMAD project from files');
+  mcp.registerTool('bmad.import_project', { description: 'Import a legacy BMAD project from files', inputSchema: anyArgs }, withDb((db, input) => tools.importProject(db, input)));
 
-  // Schema Discovery
-  register('bmad.get_mcp_schema', (input) => {
-    return SCHEMA.asBundle();
-  }, { type: 'object', properties: {} }, 'Return MCP tool schemas (inputs/outputs)');
+  // Schema Discovery (no DB)
+  mcp.registerTool('bmad.get_mcp_schema', { description: 'Return MCP tool schemas (inputs/outputs)', inputSchema: anyArgs }, async () => wrap(SCHEMA.asBundle()));
 
   const transport = new StdioServerTransport();
-  await server.connect(transport);
+  await mcp.connect(transport);
 
   if (logLevel !== 'silent') {
     console.error('[bmad-mcp] ready (db:', dbPath + ', exportDir:', exportDir + ')');
