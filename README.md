@@ -1,8 +1,9 @@
 BMAD MCP Server
 
-Objectif
-- Centraliser le framework BMAD dans un serveur MCP unique (Node.js) avec persistance SQLite et exports Markdown.
-- Réduire la consommation tokens en exposant des tools MCP au lieu de recharger le framework et les fichiers à chaque session.
+Résumé
+- Serveur MCP Node.js centralisé (SQLite) pour exécuter la méthode BMAD sans recharger le framework dans le contexte du LLM.
+- Expose des tools `bmad.*` (MCP) pour piloter tous les workflows (dev, review, planning, discovery, QA, versionning, etc.).
+- Exports Markdown pour lecture humaine (non source de vérité), générés à la demande dans `project/_bmad-output/`.
 
 Architecture
 - Base de données: SQLite (fichier unique), accessible via better-sqlite3.
@@ -23,15 +24,13 @@ Pré-requis / Conditions initiales
 - Optionnel: `~/.local/bin` présent dans le `PATH` pour le shim `bmad-mcp`.
 
 Installation (1 commande)
-- Prérequis: Node.js >= 18, `~/.local/bin` dans le PATH (optionnel), accès à `~/.config`
-- Étapes:
-  1) Cloner le repo puis: `make install`
-     - Installe le serveur dans `~/.config/bmad-server`
-     - Déclare le MCP `bmad` dans `~/.claude/mcp-servers.json`
-     - Génère le schéma MCP: `~/.config/bmad-server/schemas/mcp.schema.json`
-     - Crée un shim CLI `~/.local/bin/bmad-mcp` (si présent)
-     - Crée/complète `~/.claude/CLAUDE.md` (si manquant)
-  2) Vérifier: `bmad-mcp doctor` (ou `npx bmad-mcp doctor`)
+- Dans ce repo: `npm install` puis `make install`
+  - Installe le serveur MCP sous `~/.config/bmad-server`
+  - Déclare le serveur `bmad` dans `~/.claude/mcp-servers.json`
+  - Génère `~/.config/bmad-server/schemas/mcp.schema.json`
+  - Crée un shim `~/.local/bin/bmad-mcp` (si présent)
+  - Crée/complète `~/.claude/CLAUDE.md`
+- Vérifier: `bmad-mcp doctor`
 
 Installation globale (quand publié)
 - `npm i -g @bmad/mcp-server`
@@ -53,8 +52,8 @@ Utilisation côté projet (CLI uniquement)
 
 Créer un nouveau projet (init rapide)
 - Dans le dossier du projet:
-  1) `bmad-mcp project-init` (écrit/écrase `bmad.config.yaml` avec backup `.bak-*` + prépare `_bmad-output/`)
-  2) `bmad-mcp register-project` (enregistre le projet dans la DB centrale)
+  1) `bmad-mcp project-init` (écrit/écrase `bmad.config.yaml` avec backup `.bak-*`, prépare `_bmad-output/`)
+  2) `bmad-mcp register-project` (idempotent; enregistre/actualise le projet dans la DB)
   3) Ouvrir Claude dans ce dossier et lancer vos workflows `/bmad...`
 
 Où tourne le MCP ?
