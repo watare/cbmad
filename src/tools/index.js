@@ -2199,3 +2199,28 @@ function viewProjectStatusMd(db, input) {
 module.exports.viewPlanningDocMd = viewPlanningDocMd;
 module.exports.viewStoryMd = viewStoryMd;
 module.exports.viewProjectStatusMd = viewProjectStatusMd;
+
+// ---------- Sprint Status View (Markdown) ----------
+function viewSprintStatusMd(db, input) {
+  const { project_id } = input;
+  const st = getSprintStatus(db, { project_id });
+  const lines = [];
+  lines.push(`# Sprint Status — ${st.current_sprint || 'n/a'}`);
+  lines.push('');
+  lines.push(`- Total stories: ${st.summary.total_stories}`);
+  lines.push('- By status:');
+  const by = st.summary.by_status || {};
+  for (const k of Object.keys(by)) lines.push(`  - ${k}: ${by[k]}`);
+  lines.push('');
+  for (const epic of (st.epics || [])) {
+    lines.push(`## Epic ${epic.number}: ${epic.title} ${epic.status ? `(${epic.status})` : ''}`.trim());
+    if (!epic.stories || !epic.stories.length) { lines.push('_No stories_'); lines.push(''); continue; }
+    for (const s of epic.stories) {
+      lines.push(`- [${s.status || 'n/a'}] ${s.key} — ${s.title}`);
+    }
+    lines.push('');
+  }
+  return { __format: 'markdown', markdown: lines.join('\n') };
+}
+
+module.exports.viewSprintStatusMd = viewSprintStatusMd;

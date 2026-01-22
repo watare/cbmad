@@ -176,6 +176,7 @@ async function main() {
 
   // Sprint & Workflow
   mcp.registerTool('bmad.get_sprint_status', { description: 'Get sprint status', inputSchema: anyArgs }, withDb((db, input) => tools.getSprintStatus(db, input)));
+  mcp.registerTool('bmad.view_sprint_status_md', { description: 'Readable sprint status (markdown)', inputSchema: anyArgs }, withDb((db, input) => tools.viewSprintStatusMd(db, input)));
 
   mcp.registerTool('bmad.log_action', { description: 'Log orchestration action', inputSchema: anyArgs }, withDb((db, input) => tools.logAction(db, input)));
   mcp.registerTool('bmad.set_current_sprint', { description: 'Set current sprint label for project', inputSchema: anyArgs }, withDb((db, input) => tools.setCurrentSprint(db, input)));

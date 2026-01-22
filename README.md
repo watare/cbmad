@@ -338,6 +338,7 @@ bmad-mcp register-project
   - Vues lisibles (Markdown): `bmad.view_planning_doc_md({ project_id, type, section_index? | chunk_index? })`.
 - Sprint: `bmad.get_sprint_status`, `bmad.log_action`, `bmad.set_current_sprint`, `bmad.sprint_planning_generate`
   - Vues lisibles: `bmad.view_project_status_md()`.
+  - Sprint (lisible): `bmad.view_sprint_status_md({ project_id })`.
 - Export: `bmad.export_story_md`, `bmad.export_project_md`, `bmad.generate_pr`, `bmad.export_pr_md`
   - Docs export: `bmad.export_planning_doc` (single doc to md/html/pdf), `bmad.export_docs` (batch export)
   - Vues lisibles: `bmad.view_story_md({ story_id })`
