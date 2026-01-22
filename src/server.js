@@ -102,6 +102,7 @@ async function main() {
 
   mcp.registerTool('bmad.export_project_md', { description: 'Export the project to Markdown files', inputSchema: anyArgs }, withDb((db, input) => tools.exportProjectMd(db, input, { exportDir })));
   mcp.registerTool('bmad.export_pr_md', { description: 'Export a PR markdown for a story', inputSchema: anyArgs }, withDb((db, input) => tools.exportPrMd(db, input, { exportDir })));
+  mcp.registerTool('bmad.generate_pr', { description: 'Generate PR title/body for a story', inputSchema: anyArgs }, withDb((db, input) => tools.generatePr(db, input)));
 
   // Import
   mcp.registerTool('bmad.import_project', { description: 'Import a legacy BMAD project from files', inputSchema: anyArgs }, withDb((db, input) => tools.importProject(db, input)));

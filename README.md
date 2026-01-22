@@ -93,6 +93,7 @@ Outils MCP implémentés (v0)
  - Compléments: `bmad.set_current_sprint`, `bmad.update_acceptance_criteria`, `bmad.list_stories`, `bmad.list_epics`, `bmad.update_epic`, `bmad.search_stories`
  - Review fix: `bmad.get_review_backlog`, `bmad.complete_review_item`, `bmad.bulk_complete_review`
  - Réservations: `bmad.reserve_task`, `bmad.release_task`, `bmad.get_reservations`
+ - PR: `bmad.generate_pr` (titre/corps), `bmad.export_pr_md`
 
 Schéma MCP (JSON Schema)
 - Découverte via tool: `bmad.get_mcp_schema` (retourne le bundle inputs/outputs de tous les tools)
