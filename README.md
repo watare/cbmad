@@ -38,6 +38,7 @@ bmad-mcp bootstrap
 ### Outils « Runner BMAD » intégrés
 - `bmad.install_bmad_method`: installe/actualise BMAD‑METHOD dans le projet (ou global).
 - `bmad.list_workflows`: lit `module-help.csv` et expose la liste/codes (p. ex. `bmad:bmm:create-prd`).
+- `bmad.list_optional_workflows`: filtre les workflows optionnels (colonne required=false dans `module-help.csv`).
 - `bmad.open_workflow`: charge un workflow par code et renvoie son contenu.
 - `bmad.next_step`: renvoie l’étape suivante (splitter simple par `##`), pour guider l’agent étape par étape.
 - `bmad.generate_workflow_mapping`: génère une table de correspondance « codes → appels runner ».
@@ -150,10 +151,17 @@ Les deux approches respectent la séquence BMAD: Discovery → Planning → Solu
   - `bmad.update_planning_doc` pour persister: `type: prd | architecture | ux` avec `precondition_updated_at` (optimistic locking).
   - Versioning PRD: `bmad.prd_new`, `bmad.get_prd_versions`, `bmad.switch_prd_version` (idem génériques: `docNewVersion/switchDocVersion`).
   - UX review: `bmad.start_ux_review`, `bmad.approve_ux_review`/`bmad.reject_ux_review`, `bmad.list_ux_reviews`.
-  - Étapes optionnelles: Product Brief (synthèse).
+  - Étapes optionnelles: Product Brief (synthèse) et autres artefacts facultatifs.
     - Fichier workflow (classic): `_bmad/bmm/workflows/1-analysis/create-product-brief/workflow.md`.
     - Persistance MCP: `bmad.update_planning_doc({ type: 'product_brief' })`.
     - Versioning MCP: `bmad.product_brief_new`, `bmad.get_product_brief_versions`, `bmad.switch_product_brief_version`.
+  - Autres optionnels (mappés):
+    - NFR assess: `bmad.nfr_new` / `bmad.get_nfr_versions` / `bmad.switch_nfr_version` (type `nfr`).
+    - Test Design: `bmad.test_design_new` / `bmad.get_test_design_versions` / `bmad.switch_test_design_version` (type `test_design`).
+    - ATDD checklist: `bmad.atdd_new` / `bmad.get_atdd_versions` / `bmad.switch_atdd_version` (type `atdd`).
+    - Traceability: `bmad.trace_new` / `bmad.get_trace_versions` / `bmad.switch_trace_version` (type `traceability`).
+    - CI plan: `bmad.ci_plan_new` / `bmad.get_ci_plan_versions` / `bmad.switch_ci_plan_version` (type `ci_plan`).
+    - Tech Spec (quick spec): `bmad.tech_spec_new` / `bmad.get_tech_spec_versions` / `bmad.switch_tech_spec_version` (type `tech_spec`).
 
 ### Solutioning (Epics/Stories/Readiness)
 - Classique:
@@ -180,6 +188,7 @@ Les deux approches respectent la séquence BMAD: Discovery → Planning → Solu
   - Bootstrap 1‑commande: `bmad-mcp bootstrap` (installe workflows et met à jour CLAUDE.md avec rôles/règles de phase; prompts PM/Architect/Dev/TEA/UX inclus).
   - Statut composite: `bmad.get_project_status` (auto‑register au besoin) donne contexte+sprint+discovery+flags planning.
   - Initialisation orchestrée: `bmad.workflow_init` (register → sprint → docs → seed PRD/Arch/UX) puis renvoie le statut.
+  - Proposer les étapes optionnelles: `bmad.list_optional_workflows` pour la phase en cours; conserver leurs livrables via `bmad.save_workflow_output` (stocké en DB + exportable).
 
 ## Gains en Tokens (ordre de grandeur)
 - Classique (observé):
@@ -313,6 +322,8 @@ bmad-mcp register-project
 ### Outils MCP implémentés
 - Project: `bmad.register_project`, `bmad.get_project_context`, `bmad.get_project_status`, `bmad.workflow_init`
 - Runner BMAD: `bmad.install_bmad_method`, `bmad.list_workflows`, `bmad.open_workflow`, `bmad.next_step`, `bmad.generate_workflow_mapping`
+  - Optionnels: `bmad.list_optional_workflows`, `bmad.save_workflow_output`
+  - Optional docs versioning: `bmad.product_brief_new`, `bmad.get_product_brief_versions`, `bmad.switch_product_brief_version`, `bmad.nfr_new`, `bmad.get_nfr_versions`, `bmad.switch_nfr_version`, `bmad.test_design_new`, `bmad.get_test_design_versions`, `bmad.switch_test_design_version`, `bmad.atdd_new`, `bmad.get_atdd_versions`, `bmad.switch_atdd_version`, `bmad.trace_new`, `bmad.get_trace_versions`, `bmad.switch_trace_version`, `bmad.ci_plan_new`, `bmad.get_ci_plan_versions`, `bmad.switch_ci_plan_version`, `bmad.tech_spec_new`, `bmad.get_tech_spec_versions`, `bmad.switch_tech_spec_version`.
 - Story: `bmad.get_next_story`, `bmad.get_story_context`, `bmad.get_story_summary`, `bmad.create_story`, `bmad.update_story_status`, `bmad.update_story`, `bmad.delete_story`, `bmad.story_snapshot`, `bmad.get_story_versions`, `bmad.switch_story_version`
 - Tasks: `bmad.complete_task`, `bmad.add_review_tasks`
 - Notes & Fichiers: `bmad.add_dev_note`, `bmad.register_files`, `bmad.add_changelog_entry`

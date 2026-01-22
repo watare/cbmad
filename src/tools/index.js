@@ -1471,6 +1471,12 @@ function getProjectStatus(db, input) {
   const arch = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='architecture'").get(project_id);
   const ux = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='ux'").get(project_id);
   const brief = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='product_brief'").get(project_id);
+  const nfr = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='nfr'").get(project_id);
+  const testDesign = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='test_design'").get(project_id);
+  const atdd = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='atdd'").get(project_id);
+  const trace = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='traceability'").get(project_id);
+  const ciPlan = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='ci_plan'").get(project_id);
+  const techSpec = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='tech_spec'").get(project_id);
   return {
     found: true,
     project: { id: proj.id, name: proj.name, root_path: proj.root_path, config: cfg },
@@ -1480,7 +1486,7 @@ function getProjectStatus(db, input) {
       stories_by_status: byStatus
     },
     discovery: { recent_sessions: sessions },
-    planning_flags: { has_prd: !!prd, has_architecture: !!arch, has_ux: !!ux, has_product_brief: !!brief }
+    planning_flags: { has_prd: !!prd, has_architecture: !!arch, has_ux: !!ux, has_product_brief: !!brief, has_nfr: !!nfr, has_test_design: !!testDesign, has_atdd: !!atdd, has_traceability: !!trace, has_ci_plan: !!ciPlan, has_tech_spec: !!techSpec }
   };
 }
 
@@ -1561,6 +1567,12 @@ function workflowInit(db, input) {
   if (seed.architecture) { updatePlanningDoc(db, { project_id, type: 'architecture', content: seed.architecture, generate_summary: true }); actions.push('arch_seeded'); }
   if (seed.ux) { updatePlanningDoc(db, { project_id, type: 'ux', content: seed.ux, generate_summary: true }); actions.push('ux_seeded'); }
   if (seed.product_brief) { updatePlanningDoc(db, { project_id, type: 'product_brief', content: seed.product_brief, generate_summary: true }); actions.push('product_brief_seeded'); }
+  if (seed.nfr) { updatePlanningDoc(db, { project_id, type: 'nfr', content: seed.nfr, generate_summary: true }); actions.push('nfr_seeded'); }
+  if (seed.test_design) { updatePlanningDoc(db, { project_id, type: 'test_design', content: seed.test_design, generate_summary: true }); actions.push('test_design_seeded'); }
+  if (seed.atdd) { updatePlanningDoc(db, { project_id, type: 'atdd', content: seed.atdd, generate_summary: true }); actions.push('atdd_seeded'); }
+  if (seed.traceability) { updatePlanningDoc(db, { project_id, type: 'traceability', content: seed.traceability, generate_summary: true }); actions.push('traceability_seeded'); }
+  if (seed.ci_plan) { updatePlanningDoc(db, { project_id, type: 'ci_plan', content: seed.ci_plan, generate_summary: true }); actions.push('ci_plan_seeded'); }
+  if (seed.tech_spec) { updatePlanningDoc(db, { project_id, type: 'tech_spec', content: seed.tech_spec, generate_summary: true }); actions.push('tech_spec_seeded'); }
   const status = getProjectStatus(db, { project_id });
   return { success: true, actions, status };
 }
@@ -1724,3 +1736,26 @@ function generateWorkflowMapping(db, input) {
 }
 
 module.exports.generateWorkflowMapping = generateWorkflowMapping;
+
+// ---------- Optional Workflows helper ----------
+function listOptionalWorkflows(db, input) {
+  const { project_id, target = 'project' } = input;
+  const lw = listWorkflows(db, { project_id, target });
+  const optionals = (lw.workflows || []).filter(w => w.required === false || String(w.required).toLowerCase() === 'false');
+  return { workflows: optionals };
+}
+module.exports.listOptionalWorkflows = listOptionalWorkflows;
+
+// ---------- Save Workflow Output (generic) ----------
+function saveWorkflowOutput(db, input) {
+  const { project_id, code, title, content, tags = [] } = input;
+  if (!project_id || !code || !content) throw new Error('project_id, code, content required');
+  const name = title || code;
+  const safeCode = code.replace(/[^a-zA-Z0-9-_:.]/g, '_');
+  const relPath = `planning/outputs/${safeCode}-${Date.now()}.md`;
+  const summary = summarize(content, 800);
+  db.prepare('INSERT INTO documents (project_id, path, type, tags, content, summary) VALUES (?,?,?,?,?,?)')
+    .run(project_id, relPath, 'workflow_output', [code, ...tags].join(','), `# ${name}\n\n${content}\n`, summary);
+  return { success: true, path: relPath };
+}
+module.exports.saveWorkflowOutput = saveWorkflowOutput;

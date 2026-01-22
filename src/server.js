@@ -86,6 +86,7 @@ async function main() {
   // BMAD-METHOD installer & runner
   mcp.registerTool('bmad.install_bmad_method', { description: 'Install BMAD-METHOD workflows into project', inputSchema: anyArgs }, withDb((db, input) => tools.installBmadMethod(db, input)));
   mcp.registerTool('bmad.list_workflows', { description: 'List BMAD workflows (from module-help.csv)', inputSchema: anyArgs }, withDb((db, input) => tools.listWorkflows(db, input)));
+  mcp.registerTool('bmad.list_optional_workflows', { description: 'List optional BMAD workflows (from module-help.csv)', inputSchema: anyArgs }, withDb((db, input) => tools.listOptionalWorkflows(db, input)));
   mcp.registerTool('bmad.open_workflow', { description: 'Open a workflow by code', inputSchema: anyArgs }, withDb((db, input) => tools.openWorkflow(db, input)));
   mcp.registerTool('bmad.next_step', { description: 'Get next workflow step by index (simple splitter)', inputSchema: anyArgs }, withDb((db, input) => tools.nextStep(db, input)));
   mcp.registerTool('bmad.generate_workflow_mapping', { description: 'Generate quick reference mapping from module-help.csv', inputSchema: anyArgs }, withDb((db, input) => tools.generateWorkflowMapping(db, input)));
@@ -171,6 +172,7 @@ async function main() {
   mcp.registerTool('bmad.export_project_md', { description: 'Export the project to Markdown files', inputSchema: anyArgs }, withDb((db, input) => tools.exportProjectMd(db, input, { exportDir })));
   mcp.registerTool('bmad.export_pr_md', { description: 'Export a PR markdown for a story', inputSchema: anyArgs }, withDb((db, input) => tools.exportPrMd(db, input, { exportDir })));
   mcp.registerTool('bmad.generate_pr', { description: 'Generate PR title/body for a story', inputSchema: anyArgs }, withDb((db, input) => tools.generatePr(db, input)));
+  mcp.registerTool('bmad.save_workflow_output', { description: 'Save generic output of a workflow step into documents', inputSchema: anyArgs }, withDb((db, input) => tools.saveWorkflowOutput(db, input)));
 
   // Import
   mcp.registerTool('bmad.import_project', { description: 'Import a legacy BMAD project from files', inputSchema: anyArgs }, withDb((db, input) => tools.importProject(db, input)));
@@ -216,6 +218,30 @@ async function main() {
   mcp.registerTool('bmad.product_brief_new', { description: 'Create a new Product Brief version and set current', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'product_brief' })));
   mcp.registerTool('bmad.get_product_brief_versions', { description: 'List Product Brief versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'product_brief' })));
   mcp.registerTool('bmad.switch_product_brief_version', { description: 'Switch Product Brief to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'product_brief' })));
+  // Additional optional docs versioning
+  mcp.registerTool('bmad.nfr_new', { description: 'Create a new NFR assessment version', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'nfr' })));
+  mcp.registerTool('bmad.get_nfr_versions', { description: 'List NFR assessment versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'nfr' })));
+  mcp.registerTool('bmad.switch_nfr_version', { description: 'Switch NFR assessment to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'nfr' })));
+
+  mcp.registerTool('bmad.test_design_new', { description: 'Create a new Test Design version', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'test_design' })));
+  mcp.registerTool('bmad.get_test_design_versions', { description: 'List Test Design versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'test_design' })));
+  mcp.registerTool('bmad.switch_test_design_version', { description: 'Switch Test Design to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'test_design' })));
+
+  mcp.registerTool('bmad.atdd_new', { description: 'Create a new ATDD checklist/version', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'atdd' })));
+  mcp.registerTool('bmad.get_atdd_versions', { description: 'List ATDD versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'atdd' })));
+  mcp.registerTool('bmad.switch_atdd_version', { description: 'Switch ATDD to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'atdd' })));
+
+  mcp.registerTool('bmad.trace_new', { description: 'Create a new traceability matrix version', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'traceability' })));
+  mcp.registerTool('bmad.get_trace_versions', { description: 'List traceability versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'traceability' })));
+  mcp.registerTool('bmad.switch_trace_version', { description: 'Switch traceability to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'traceability' })));
+
+  mcp.registerTool('bmad.ci_plan_new', { description: 'Create a new CI plan version', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'ci_plan' })));
+  mcp.registerTool('bmad.get_ci_plan_versions', { description: 'List CI plan versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'ci_plan' })));
+  mcp.registerTool('bmad.switch_ci_plan_version', { description: 'Switch CI plan to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'ci_plan' })));
+
+  mcp.registerTool('bmad.tech_spec_new', { description: 'Create a new technical spec version', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'tech_spec' })));
+  mcp.registerTool('bmad.get_tech_spec_versions', { description: 'List technical spec versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'tech_spec' })));
+  mcp.registerTool('bmad.switch_tech_spec_version', { description: 'Switch technical spec to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'tech_spec' })));
   // Epics versioning
   mcp.registerTool('bmad.epic_new_version', { description: 'Create a new epic version', inputSchema: anyArgs }, withDb((db, input) => tools.epicNewVersion(db, input)));
   mcp.registerTool('bmad.get_epic_versions', { description: 'List epic versions', inputSchema: anyArgs }, withDb((db, input) => tools.getEpicVersions(db, input)));
