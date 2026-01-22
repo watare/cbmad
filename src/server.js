@@ -9,7 +9,13 @@ const fs = require('fs');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const z = require('zod');
-const Types = require('@modelcontextprotocol/sdk/types');
+let Types = null;
+try {
+  Types = require('@modelcontextprotocol/sdk/types');
+} catch (e) {
+  // Older SDKs may not expose CJS subpath exports for /types; degrade gracefully.
+  // Resource handlers will be skipped if Types is unavailable.
+}
 
 const tools = require('./tools');
 const SCHEMA = require('./schema');
@@ -86,38 +92,41 @@ async function main() {
 
   // MCP Resources: expose installed workflows for browsing
   try {
-    mcp.server.registerCapabilities({ resources: { listChanged: true } });
-    mcp.server.setRequestHandler(Types.ListResourcesRequestSchema, (request) => {
-      // List workflow files as resources under bmad://workflows/
-      const items = [];
-      const home = os.homedir();
-      const globalBase = path.join(home, '.config', 'bmad-server', 'bmm', 'workflows');
-      function walk(root, baseUri) {
-        if (!fs.existsSync(root)) return;
-        for (const dirent of fs.readdirSync(root, { withFileTypes: true })) {
-          const p = path.join(root, dirent.name);
-          if (dirent.isDirectory()) walk(p, baseUri + '/' + dirent.name);
-          else {
-            const ext = path.extname(dirent.name).toLowerCase();
-            const mime = ext === '.md' ? 'text/markdown' : (ext === '.yaml' || ext === '.yml' ? 'text/yaml' : 'text/plain');
-            items.push({ uri: `bmad://workflows${baseUri}/${dirent.name}`, name: dirent.name, mimeType: mime, description: 'BMAD workflow asset' });
+    if (Types && Types.ListResourcesRequestSchema && Types.ReadResourceRequestSchema) {
+      mcp.server.registerCapabilities({ resources: { listChanged: true } });
+      mcp.server.setRequestHandler(Types.ListResourcesRequestSchema, (request) => {
+        const items = [];
+        const home = os.homedir();
+        const globalBase = path.join(home, '.config', 'bmad-server', 'bmm', 'workflows');
+        function walk(root, baseUri) {
+          if (!fs.existsSync(root)) return;
+          for (const dirent of fs.readdirSync(root, { withFileTypes: true })) {
+            const p = path.join(root, dirent.name);
+            if (dirent.isDirectory()) walk(p, baseUri + '/' + dirent.name);
+            else {
+              const ext = path.extname(dirent.name).toLowerCase();
+              const mime = ext === '.md' ? 'text/markdown' : (ext === '.yaml' || ext === '.yml' ? 'text/yaml' : 'text/plain');
+              items.push({ uri: `bmad://workflows${baseUri}/${dirent.name}`, name: dirent.name, mimeType: mime, description: 'BMAD workflow asset' });
+            }
           }
         }
-      }
-      walk(globalBase, '');
-      return { resources: items };
-    });
-    mcp.server.setRequestHandler(Types.ReadResourceRequestSchema, (request) => {
-      const uri = request.params.uri || '';
-      if (!uri.startsWith('bmad://workflows')) throw new Error('Unsupported URI');
-      const rel = uri.replace('bmad://workflows', '');
-      const p = path.join(os.homedir(), '.config', 'bmad-server', 'bmm', 'workflows', rel);
-      if (!fs.existsSync(p)) throw new Error('Not found');
-      const ext = path.extname(p).toLowerCase();
-      const mime = ext === '.md' ? 'text/markdown' : (ext === '.yaml' || ext === '.yml' ? 'text/yaml' : 'text/plain');
-      const text = fs.readFileSync(p, 'utf8');
-      return { contents: [{ uri, mimeType: mime, text }] };
-    });
+        walk(globalBase, '');
+        return { resources: items };
+      });
+      mcp.server.setRequestHandler(Types.ReadResourceRequestSchema, (request) => {
+        const uri = request.params.uri || '';
+        if (!uri.startsWith('bmad://workflows')) throw new Error('Unsupported URI');
+        const rel = uri.replace('bmad://workflows', '');
+        const p = path.join(os.homedir(), '.config', 'bmad-server', 'bmm', 'workflows', rel);
+        if (!fs.existsSync(p)) throw new Error('Not found');
+        const ext = path.extname(p).toLowerCase();
+        const mime = ext === '.md' ? 'text/markdown' : (ext === '.yaml' || ext === '.yml' ? 'text/yaml' : 'text/plain');
+        const text = fs.readFileSync(p, 'utf8');
+        return { contents: [{ uri, mimeType: mime, text }] };
+      });
+    } else if (logLevel !== 'silent') {
+      console.error('[bmad-mcp] @modelcontextprotocol/sdk/types not available; skipping resource handlers');
+    }
   } catch (e) {
     if (mcp?.server && logLevel !== 'silent') console.error('[bmad-mcp] resources capability not available:', e.message);
   }
