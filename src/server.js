@@ -135,6 +135,18 @@ async function main() {
   mcp.registerTool('bmad.list_documents', { description: 'List indexed documents', inputSchema: anyArgs }, withDb((db, input) => tools.listDocuments(db, input)));
   mcp.registerTool('bmad.get_document', { description: 'Get one document (summary/full)', inputSchema: anyArgs }, withDb((db, input) => tools.getDocument(db, input)));
   mcp.registerTool('bmad.search_documents', { description: 'Search indexed documents', inputSchema: anyArgs }, withDb((db, input) => tools.searchDocuments(db, input)));
+  // Bugs / Quick Fix
+  mcp.registerTool('bmad.create_bug', { description: 'Create a bug ticket', inputSchema: anyArgs }, withDb((db, input) => tools.createBug(db, input)));
+  mcp.registerTool('bmad.update_bug_status', { description: 'Update bug status', inputSchema: anyArgs }, withDb((db, input) => tools.updateBugStatus(db, input)));
+  mcp.registerTool('bmad.get_bug', { description: 'Get a bug', inputSchema: anyArgs }, withDb((db, input) => tools.getBug(db, input)));
+  mcp.registerTool('bmad.list_bugs', { description: 'List bugs', inputSchema: anyArgs }, withDb((db, input) => tools.listBugs(db, input)));
+  mcp.registerTool('bmad.link_bug_files', { description: 'Link files to a bug', inputSchema: anyArgs }, withDb((db, input) => tools.linkBugFiles(db, input)));
+  mcp.registerTool('bmad.link_bug_story', { description: 'Link bug to a story', inputSchema: anyArgs }, withDb((db, input) => tools.linkBugStory(db, input)));
+  mcp.registerTool('bmad.generate_bugfix_pr', { description: 'Generate PR text for a bugfix', inputSchema: anyArgs }, withDb((db, input) => tools.generateBugfixPr(db, input)));
+  // PRD versioning
+  mcp.registerTool('bmad.prd_new', { description: 'Create a new PRD version and set current', inputSchema: anyArgs }, withDb((db, input) => tools.prdNew(db, input)));
+  mcp.registerTool('bmad.get_prd_versions', { description: 'List PRD versions', inputSchema: anyArgs }, withDb((db, input) => tools.getPrdVersions(db, input)));
+  mcp.registerTool('bmad.switch_prd_version', { description: 'Switch current PRD to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchPrdVersion(db, input)));
   // Review fix
   mcp.registerTool('bmad.get_review_backlog', { description: 'List pending review follow-up items', inputSchema: anyArgs }, withDb((db, input) => tools.getReviewBacklog(db, input)));
   mcp.registerTool('bmad.complete_review_item', { description: 'Complete a review follow-up item', inputSchema: anyArgs }, withDb((db, input) => tools.completeReviewItem(db, input)));

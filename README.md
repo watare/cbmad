@@ -99,7 +99,9 @@ Outils MCP implémentés (v0)
  - Labels: `bmad.set_story_labels`, `bmad.list_story_labels`, `bmad.search_by_label`
  - Split/Merge: `bmad.split_story`, `bmad.merge_stories`
  - Story sprint assign: `bmad.set_story_sprint`, `bmad.list_stories_by_sprint`
- - Document discovery: `bmad.scan_documents`, `bmad.list_documents`, `bmad.get_document`, `bmad.search_documents`
+- Document discovery: `bmad.scan_documents`, `bmad.list_documents`, `bmad.get_document`, `bmad.search_documents`
+ - Bugs/Quick fix: `bmad.create_bug`, `bmad.update_bug_status`, `bmad.get_bug`, `bmad.list_bugs`, `bmad.link_bug_files`, `bmad.link_bug_story`, `bmad.generate_bugfix_pr`
+ - PRD versioning: `bmad.prd_new`, `bmad.get_prd_versions`, `bmad.switch_prd_version`
 
 Schéma MCP (JSON Schema)
 - Découverte via tool: `bmad.get_mcp_schema` (retourne le bundle inputs/outputs de tous les tools)

@@ -93,6 +93,16 @@ function migrate(db) {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS planning_doc_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      type TEXT NOT NULL,
+      version TEXT NOT NULL,
+      content TEXT,
+      summary TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(project_id, type, version)
+    )`,
     `CREATE TABLE IF NOT EXISTS documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id TEXT NOT NULL REFERENCES projects(id),
@@ -136,3 +146,22 @@ function migrate(db) {
 }
 
 module.exports = { getDb, migrate };
+    `CREATE TABLE IF NOT EXISTS bugs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      title TEXT NOT NULL,
+      description TEXT,
+      severity TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      story_id TEXT REFERENCES stories(id),
+      introduced_in TEXT,
+      fixed_in TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS bug_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bug_id TEXT NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_bugs_project ON bugs(project_id)` ,

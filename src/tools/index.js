@@ -799,3 +799,125 @@ module.exports.scanDocuments = scanDocuments;
 module.exports.listDocuments = listDocuments;
 module.exports.getDocument = getDocument;
 module.exports.searchDocuments = searchDocuments;
+
+// ---------- Bugs / Quick Fix ----------
+function nextBugId(db, project_id) {
+  const row = db.prepare("SELECT COUNT(*) AS n FROM bugs WHERE project_id=?").get(project_id);
+  const n = (row?.n || 0) + 1;
+  return `${project_id}:bug-${n}`;
+}
+
+function createBug(db, input) {
+  const { project_id, title, description, severity, story_id, introduced_in } = input;
+  const id = nextBugId(db, project_id);
+  db.prepare(`INSERT INTO bugs (id, project_id, title, description, severity, status, story_id, introduced_in)
+              VALUES (?,?,?,?,?,'open',?,?)`).run(id, project_id, title, description || null, severity || null, story_id || null, introduced_in || null);
+  return { success: true, bug_id: id };
+}
+
+function updateBugStatus(db, input) {
+  const { bug_id, status, fixed_in } = input;
+  const res = db.prepare('UPDATE bugs SET status=?, fixed_in=COALESCE(?,fixed_in), updated_at=CURRENT_TIMESTAMP WHERE id=?').run(status, fixed_in || null, bug_id);
+  return { success: res.changes > 0 };
+}
+
+function getBug(db, input) {
+  const { bug_id } = input;
+  const b = db.prepare('SELECT * FROM bugs WHERE id=?').get(bug_id);
+  if (!b) return { found: false };
+  const files = db.prepare('SELECT file_path FROM bug_files WHERE bug_id=?').all(bug_id).map(r => r.file_path);
+  return { found: true, bug: { ...b, files } };
+}
+
+function listBugs(db, input) {
+  const { project_id, status, severity, limit = 100, offset = 0 } = input;
+  let sql = 'SELECT id, title, severity, status, story_id, created_at, updated_at FROM bugs WHERE project_id=?';
+  const params = [project_id];
+  if (status) { sql += ' AND status=?'; params.push(status); }
+  if (severity) { sql += ' AND severity=?'; params.push(severity); }
+  sql += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?'; params.push(limit, offset);
+  return { bugs: db.prepare(sql).all(...params) };
+}
+
+function linkBugFiles(db, input) {
+  const { bug_id, files } = input;
+  const ins = db.prepare('INSERT INTO bug_files (bug_id, file_path) VALUES (?,?)');
+  const tx = db.transaction(() => {
+    for (const f of files || []) ins.run(bug_id, f);
+  });
+  tx();
+  return { success: true };
+}
+
+function linkBugStory(db, input) {
+  const { bug_id, story_id } = input;
+  db.prepare('UPDATE bugs SET story_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(story_id, bug_id);
+  return { success: true };
+}
+
+function generateBugfixPr(db, input) {
+  const { bug_id } = input;
+  const { found, bug } = getBug(db, { bug_id });
+  if (!found) throw new Error('Bug not found');
+  const title = `[BUGFIX] ${bug.title}`;
+  const lines = [];
+  lines.push(`# ${title}`);
+  lines.push('', `Severity: ${bug.severity || 'n/a'}`);
+  lines.push('', `Status: ${bug.status}`);
+  if (bug.story_id) {
+    const s = db.prepare('SELECT key, title FROM stories WHERE id=?').get(bug.story_id) || {};
+    lines.push('', `Story: ${s.key || ''} ${s.title || ''}`);
+  }
+  if (bug.files?.length) {
+    lines.push('', '## Impacted Files');
+    for (const f of bug.files) lines.push(`- ${f}`);
+  }
+  lines.push('', '## Description');
+  lines.push(bug.description || '');
+  return { title, body: lines.join('\n') };
+}
+
+module.exports.createBug = createBug;
+module.exports.updateBugStatus = updateBugStatus;
+module.exports.getBug = getBug;
+module.exports.listBugs = listBugs;
+module.exports.linkBugFiles = linkBugFiles;
+module.exports.linkBugStory = linkBugStory;
+module.exports.generateBugfixPr = generateBugfixPr;
+
+// ---------- PRD Versioning ----------
+function prdNew(db, input) {
+  const { project_id, version, content } = input;
+  const summary = summarize(content, 1200);
+  db.prepare('INSERT INTO planning_doc_versions (project_id, type, version, content, summary) VALUES (?,?,?,?,?)')
+    .run(project_id, 'prd', version, content, summary);
+  // keep current planning_docs pointing to latest content
+  const id = `${project_id}:prd`;
+  db.prepare(`INSERT INTO planning_docs (id, project_id, type, content, summary)
+              VALUES (?,?,?,?,?)
+              ON CONFLICT(id) DO UPDATE SET content=excluded.content, summary=excluded.summary, updated_at=CURRENT_TIMESTAMP`)
+    .run(id, project_id, 'prd', content, summary);
+  return { success: true };
+}
+
+function getPrdVersions(db, input) {
+  const { project_id } = input;
+  const rows = db.prepare('SELECT version, created_at FROM planning_doc_versions WHERE project_id=? AND type=? ORDER BY id DESC').all(project_id, 'prd');
+  return { versions: rows };
+}
+
+function switchPrdVersion(db, input) {
+  const { project_id, version } = input;
+  const row = db.prepare('SELECT content, summary FROM planning_doc_versions WHERE project_id=? AND type=? AND version=?').get(project_id, 'prd', version);
+  if (!row) throw new Error('Version not found');
+  const id = `${project_id}:prd`;
+  db.prepare(`INSERT INTO planning_docs (id, project_id, type, content, summary)
+              VALUES (?,?,?,?,?)
+              ON CONFLICT(id) DO UPDATE SET content=excluded.content, summary=excluded.summary, updated_at=CURRENT_TIMESTAMP`)
+    .run(id, project_id, 'prd', row.content, row.summary);
+  return { success: true };
+}
+
+module.exports.prdNew = prdNew;
+module.exports.getPrdVersions = getPrdVersions;
+module.exports.switchPrdVersion = switchPrdVersion;
