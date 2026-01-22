@@ -288,6 +288,32 @@ function migrate(db) {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE INDEX IF NOT EXISTS idx_bugs_project ON bugs(project_id)`
+    ,
+    `CREATE TABLE IF NOT EXISTS components (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      name TEXT NOT NULL,
+      type TEXT NOT NULL, -- front | back
+      version TEXT,
+      description TEXT,
+      tags TEXT,
+      target_repo TEXT,
+      target_path TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(project_id, name)
+    )`,
+    `CREATE TABLE IF NOT EXISTS component_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      component_id TEXT NOT NULL REFERENCES components(id) ON DELETE CASCADE,
+      rel_path TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS component_docs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      component_id TEXT NOT NULL REFERENCES components(id) ON DELETE CASCADE,
+      doc_type TEXT NOT NULL, -- readme | api | usage | changelog
+      content TEXT
+    )`
   ];
   db.transaction(() => { stmts.forEach(sql => db.prepare(sql).run()); })();
 }

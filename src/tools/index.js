@@ -1308,3 +1308,154 @@ module.exports.startReadiness = startReadiness;
 module.exports.updateReadinessItem = updateReadinessItem;
 module.exports.getReadinessStatus = getReadinessStatus;
 module.exports.finalizeReadiness = finalizeReadiness;
+module.exports.listProjects = function(db){ return listProjects(db); };
+module.exports.listResearchSessions = listResearchSessions;
+
+// ---------- Components Registry & Export ----------
+const cp = require('child_process');
+
+function componentId(project_id, name) { return `${project_id}:comp:${name}`; }
+
+function registerComponent(db, input) {
+  const { project_id, name, type, version, description, tags, files, target_repo, target_path } = input;
+  if (!project_id || !name || !type) throw new Error('project_id, name, type required');
+  const id = componentId(project_id, name);
+  db.prepare(`INSERT INTO components (id, project_id, name, type, version, description, tags, target_repo, target_path)
+              VALUES (?,?,?,?,?,?,?,?,?)
+              ON CONFLICT(id) DO UPDATE SET version=excluded.version, description=excluded.description, tags=excluded.tags, target_repo=excluded.target_repo, target_path=excluded.target_path, updated_at=CURRENT_TIMESTAMP`)
+    .run(id, project_id, name, type, version || null, description || null, (tags || []).join(','), target_repo || null, target_path || null);
+  // store file list (reset then insert)
+  db.prepare('DELETE FROM component_files WHERE component_id=?').run(id);
+  const ins = db.prepare('INSERT INTO component_files (component_id, rel_path) VALUES (?,?)');
+  for (const f of files || []) ins.run(id, f.path || f);
+  return { success: true, component_id: id };
+}
+
+function listComponents(db, input) {
+  const { project_id } = input;
+  let sql = 'SELECT id, project_id, name, type, version, description, tags, target_repo, target_path, updated_at FROM components';
+  const params = [];
+  if (project_id) { sql += ' WHERE project_id=?'; params.push(project_id); }
+  sql += ' ORDER BY updated_at DESC';
+  const rows = db.prepare(sql).all(...params).map(r => ({ ...r, tags: (r.tags || '').split(',').filter(Boolean) }));
+  return { components: rows };
+}
+
+function generateComponentReadme(meta, files) {
+  const lines = [];
+  lines.push(`# ${meta.name}`);
+  if (meta.description) { lines.push('', meta.description); }
+  lines.push('', '## Metadata');
+  lines.push(`- Type: ${meta.type}`);
+  if (meta.version) lines.push(`- Version: ${meta.version}`);
+  if (meta.tags?.length) lines.push(`- Tags: ${meta.tags.join(', ')}`);
+  lines.push('', '## Files');
+  for (const f of files) lines.push(`- ${f}`);
+  lines.push('', '## Usage');
+  lines.push('Describe how to import/use this component in consuming projects.');
+  return lines.join('\n');
+}
+
+function exportComponent(db, input) {
+  const { component_id, output_dir } = input;
+  const c = db.prepare('SELECT * FROM components WHERE id=?').get(component_id);
+  if (!c) throw new Error('Component not found');
+  const files = db.prepare('SELECT rel_path FROM component_files WHERE component_id=? ORDER BY id ASC').all(component_id).map(r => r.rel_path);
+  const proj = db.prepare('SELECT root_path FROM projects WHERE id=?').get(c.project_id);
+  const root = proj?.root_path;
+  if (!root) throw new Error('Project root_path not set');
+  const base = output_dir || path.join(root, '_bmad-output', 'components', c.name);
+  ensureDir(base);
+  // copy files preserving relative structure
+  for (const rel of files) {
+    const src = path.join(root, rel);
+    const dst = path.join(base, rel);
+    ensureDir(path.dirname(dst));
+    fs.copyFileSync(src, dst);
+  }
+  const readme = generateComponentReadme({ name: c.name, type: c.type, version: c.version, description: c.description, tags: (c.tags || '').split(',').filter(Boolean) }, files);
+  fs.writeFileSync(path.join(base, 'README.md'), readme, 'utf8');
+  return { success: true, path: base };
+}
+
+function commitComponent(db, input) {
+  const { component_id, repo_url, branch = 'main', target_subdir = 'components', dry_run = false } = input;
+  const c = db.prepare('SELECT * FROM components WHERE id=?').get(component_id);
+  if (!c) throw new Error('Component not found');
+  const proj = db.prepare('SELECT root_path FROM projects WHERE id=?').get(c.project_id);
+  const root = proj?.root_path;
+  if (!root) throw new Error('Project root_path not set');
+  // Export to temp dir first
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir?.() || '/tmp', 'bmad-comp-'));
+  const exp = exportComponent(db, { component_id, output_dir: tmp });
+  const localBase = process.env.BMAD_COMPONENTS_DIR || path.join(os.homedir(), '.config', 'bmad-server', 'components');
+  ensureDir(localBase);
+  const repoName = (c.type === 'front' ? 'frontcomponent' : 'backcomponent');
+  const repoDir = path.join(localBase, repoName);
+  const cmds = [];
+  if (!fs.existsSync(path.join(repoDir, '.git'))) {
+    ensureDir(repoDir);
+    cmds.push(['git', 'clone', repo_url || `git@github.com:watare/${repoName}.git`, repoDir]);
+  } else {
+    cmds.push(['git', '-C', repoDir, 'fetch']);
+    cmds.push(['git', '-C', repoDir, 'checkout', branch]);
+    cmds.push(['git', '-C', repoDir, 'pull', '--rebase']);
+  }
+  const dest = path.join(repoDir, target_subdir, c.name);
+  cmds.push(['bash', '-lc', `rm -rf ${JSON.stringify(dest)} && mkdir -p ${JSON.stringify(dest)}`]);
+  cmds.push(['bash', '-lc', `cp -R ${JSON.stringify(exp.path + '/.')} ${JSON.stringify(dest)}`]);
+  const msg = input.commit_message || `feat(${c.name}): publish ${c.type} component from ${c.project_id}`;
+  cmds.push(['git', '-C', repoDir, 'add', '.']);
+  cmds.push(['git', '-C', repoDir, 'commit', '-m', msg]);
+  cmds.push(['git', '-C', repoDir, 'push', 'origin', branch]);
+  if (dry_run) {
+    return { success: true, commands: cmds.map(a => a.join(' ')), target: dest };
+  }
+  for (const a of cmds) {
+    try { cp.execFileSync(a[0], a.slice(1), { stdio: 'inherit' }); } catch (e) { throw new Error(`Command failed: ${a.join(' ')}\n${e.message}`); }
+  }
+  return { success: true, repo_dir: repoDir, target_path: dest };
+}
+
+module.exports.registerComponent = registerComponent;
+module.exports.listComponents = listComponents;
+module.exports.exportComponent = exportComponent;
+module.exports.commitComponent = commitComponent;
+
+// ---------- Project Status (composite) ----------
+function getProjectStatus(db, input) {
+  const { project_id, name, root_path, config } = input || {};
+  if (!project_id) throw new Error('project_id required');
+  let proj = db.prepare('SELECT id, name, root_path, config, created_at, updated_at FROM projects WHERE id=?').get(project_id);
+  if (!proj) {
+    if (root_path) {
+      registerProject(db, { id: project_id, name: name || project_id, root_path, config: config || {} });
+      proj = db.prepare('SELECT id, name, root_path, config, created_at, updated_at FROM projects WHERE id=?').get(project_id);
+    } else {
+      return { found: false, needs_registration: true };
+    }
+  }
+  const cfg = proj.config ? JSON.parse(proj.config) : null;
+  const statsRow = db.prepare('SELECT COUNT(*) AS epics FROM epics WHERE project_id=?').get(project_id);
+  const storiesCount = db.prepare('SELECT COUNT(*) AS stories FROM stories WHERE project_id=?').get(project_id);
+  const byStatusRows = db.prepare('SELECT status, COUNT(*) AS n FROM stories WHERE project_id=? GROUP BY status').all(project_id);
+  const byStatus = Object.fromEntries(byStatusRows.map(r => [r.status, r.n]));
+  const sprint = db.prepare('SELECT current_sprint FROM sprint_status WHERE project_id=?').get(project_id);
+  const sessions = db.prepare('SELECT id, topic, status, created_at FROM research_sessions WHERE project_id=? ORDER BY id DESC LIMIT 5').all(project_id);
+  const prd = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='prd'").get(project_id);
+  const arch = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='architecture'").get(project_id);
+  const ux = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='ux'").get(project_id);
+  return {
+    found: true,
+    project: { id: proj.id, name: proj.name, root_path: proj.root_path, config: cfg },
+    summary: {
+      current_sprint: sprint ? sprint.current_sprint : null,
+      counts: { epics: statsRow.epics, stories: storiesCount.stories },
+      stories_by_status: byStatus
+    },
+    discovery: { recent_sessions: sessions },
+    planning_flags: { has_prd: !!prd, has_architecture: !!arch, has_ux: !!ux }
+  };
+}
+
+module.exports.getProjectStatus = getProjectStatus;

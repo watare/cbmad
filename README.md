@@ -135,6 +135,7 @@ bmad-mcp register-project
 - Document discovery: `bmad.scan_documents`, `bmad.list_documents`, `bmad.get_document`, `bmad.search_documents`
  - Bugs/Quick fix: `bmad.create_bug`, `bmad.update_bug_status`, `bmad.get_bug`, `bmad.list_bugs`, `bmad.link_bug_files`, `bmad.link_bug_story`, `bmad.generate_bugfix_pr`
  - PRD versioning: `bmad.prd_new`, `bmad.get_prd_versions`, `bmad.switch_prd_version`
+ - Components registry: `bmad.register_component`, `bmad.list_components`, `bmad.export_component`, `bmad.commit_component`
 
 ### Schéma MCP (JSON Schema)
 - Découverte via tool: `bmad.get_mcp_schema` (retourne le bundle inputs/outputs de tous les tools)

@@ -74,6 +74,7 @@ async function main() {
   mcp.registerTool('bmad.register_project', { description: 'Register or update a BMAD project', inputSchema: anyArgs }, withDb((db, input) => tools.registerProject(db, input)));
 
   mcp.registerTool('bmad.get_project_context', { description: 'Get project summary context', inputSchema: anyArgs }, withDb((db, input) => tools.getProjectContext(db, input)));
+  mcp.registerTool('bmad.get_project_status', { description: 'Composite project status (context + sprint + discovery + flags)', inputSchema: anyArgs }, withDb((db, input) => tools.getProjectStatus(db, input)));
 
   // Story Management
   mcp.registerTool('bmad.get_next_story', { description: 'Get the next story to develop', inputSchema: anyArgs }, withDb((db, input) => tools.getNextStory(db, input)));
@@ -217,6 +218,11 @@ async function main() {
   mcp.registerTool('bmad.list_epics', { description: 'List epics for a project', inputSchema: anyArgs }, withDb((db, input) => tools.listEpics(db, input)));
   mcp.registerTool('bmad.update_epic', { description: 'Create or update an epic', inputSchema: anyArgs }, withDb((db, input) => tools.updateEpic(db, input)));
   mcp.registerTool('bmad.search_stories', { description: 'Search stories by title/description', inputSchema: anyArgs }, withDb((db, input) => tools.searchStories(db, input)));
+  // Components registry
+  mcp.registerTool('bmad.register_component', { description: 'Register a reusable component', inputSchema: anyArgs }, withDb((db, input) => tools.registerComponent(db, input)));
+  mcp.registerTool('bmad.list_components', { description: 'List registered components', inputSchema: anyArgs }, withDb((db, input) => tools.listComponents(db, input)));
+  mcp.registerTool('bmad.export_component', { description: 'Export component files and docs', inputSchema: anyArgs }, withDb((db, input) => tools.exportComponent(db, input)));
+  mcp.registerTool('bmad.commit_component', { description: 'Commit component to central repository', inputSchema: anyArgs }, withDb((db, input) => tools.commitComponent(db, input)));
 
   const transport = new StdioServerTransport();
   await mcp.connect(transport);
