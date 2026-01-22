@@ -1,0 +1,7 @@
+project_id: filter
+name: filter
+root_path: /home/ubuntu/cbmad/filter
+config:
+  user_name: your-name
+  user_skill_level: expert
+  communication_language: fr

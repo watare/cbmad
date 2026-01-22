@@ -31,7 +31,7 @@ Installation globale (quand publié)
 - `npm i -g @bmad/mcp-server`
 - `bmad-mcp init`
 
-Utilisation côté projet
+Utilisation côté projet (CLI uniquement)
 - Ajouter un fichier léger `bmad.config.yaml` au niveau racine du projet (identité, nom, chemin), par exemple:
 
   project_id: gridmv
@@ -46,10 +46,10 @@ Utilisation côté projet
 - Les exports humains se trouvent dans `_bmad-output/` du projet si vous les demandez explicitement via `bmad.export_project_md` en définissant `output_dir` vers ce dossier.
 
 Créer un nouveau projet (init rapide)
-- Depuis la racine du projet: `bmad-mcp project-init`
-  - Génère `bmad.config.yaml` et prépare `_bmad-output/`
-  - À l’ouverture dans Claude: exécuter `bmad.register_project` (le maître le fait en premier)
-- Option Makefile projet: copiez `templates/project/Makefile` dans votre repo, puis `make bmad-init`
+- Dans le dossier du projet:
+  1) `bmad-mcp project-init` (génère `bmad.config.yaml` + `_bmad-output/`)
+  2) `bmad-mcp register-project` (enregistre le projet dans la DB centrale)
+  3) Ouvrir Claude dans ce dossier et lancer vos workflows `/bmad...`
 
 Où tourne le MCP ?
 - En mode MCP, Claude lance le binaire configuré (ici `node ~/.config/bmad-server/server.js`) et communique via stdio.

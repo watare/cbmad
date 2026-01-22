@@ -5,7 +5,6 @@
     - init: install server into ~/.config/bmad-server and create DB
     - schema: write MCP schema bundle to ~/.config/bmad-server/schemas/mcp.schema.json
     - project-init: scaffold bmad.config.yaml in current directory
-    - project-scaffold: add Makefile template for project (bmad-init)
     - register-project [config]: register current project (reads bmad.config.yaml by default)
     - import <path>: guidance to import legacy BMAD project
     - doctor: show environment and config paths
@@ -48,9 +47,7 @@ function installServer() {
   ensureDir(path.join(root, 'exports'));
 
   const packageRoot = path.join(__dirname, '..');
-  const serverSrc = path.join(packageRoot, 'src', 'server.js');
-  const serverDst = path.join(root, 'server.js');
-  copyFileSafe(serverSrc, serverDst);
+  const serverDst = path.join(packageRoot, 'src', 'server.js');
 
   // Drop default schemas (placeholder)
   const schemaSrcDir = path.join(packageRoot, 'schemas');
@@ -141,18 +138,6 @@ function cmdProjectInit(cwd) {
   console.log('Astuce: en session, appelez bmad.register_project pour enregistrer ce projet.');
 }
 
-function cmdProjectScaffold(cwd) {
-  const projectRoot = cwd || process.cwd();
-  const src = path.join(__dirname, '..', 'templates', 'project', 'Makefile');
-  const dst = path.join(projectRoot, 'Makefile');
-  if (fs.existsSync(dst)) {
-    console.log('Makefile already exists, not overwriting.');
-    return;
-  }
-  fs.copyFileSync(src, dst);
-  console.log('✔ Project Makefile created:', dst);
-}
-
 function cmdRegisterProject(cfgPath) {
   const { getDb, migrate } = require('../src/store/db');
   const tools = require('../src/tools');
@@ -204,9 +189,6 @@ switch (cmd) {
   case 'project-init':
     cmdProjectInit(process.cwd());
     break;
-  case 'project-scaffold':
-    cmdProjectScaffold(process.cwd());
-    break;
   case 'import':
     cmdImport(arg1);
     break;
@@ -220,6 +202,6 @@ switch (cmd) {
     cmdSchema();
     break;
   default:
-    console.log('Usage: bmad-mcp <init|project-init|project-scaffold|register-project|import|doctor|schema>');
+    console.log('Usage: bmad-mcp <init|project-init|register-project|import|doctor|schema>');
     process.exit(2);
 }

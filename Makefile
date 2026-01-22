@@ -8,9 +8,8 @@ install: install-local claude-md schema cli-link
 
 install-local:
 	mkdir -p $(PREFIX)/db $(PREFIX)/schemas $(PREFIX)/exports
-	cp -f src/server.js $(PREFIX)/server.js
 	mkdir -p $(HOME)/.claude
-	node -e "const fs=require('fs'),p=process.env.HOME+'/.claude/mcp-servers.json';let j={};if(fs.existsSync(p)){try{j=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){}};j.bmad={command:'node',args:['$(PREFIX)/server.js'],env:{BMAD_DB_PATH:'$(PREFIX)/db/bmad.sqlite',BMAD_LOG_LEVEL:'info',BMAD_EXPORT_DIR:'$(PREFIX)/exports'}};fs.writeFileSync(p,JSON.stringify(j,null,2));console.log('Wrote',p);"
+	node -e "const fs=require('fs'),p=process.env.HOME+'/.claude/mcp-servers.json';let j={};if(fs.existsSync(p)){try{j=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){}};j.bmad={command:'node',args:['$(PWD)/src/server.js'],env:{BMAD_DB_PATH:'$(PREFIX)/db/bmad.sqlite',BMAD_LOG_LEVEL:'info',BMAD_EXPORT_DIR:'$(PREFIX)/exports'}};fs.writeFileSync(p,JSON.stringify(j,null,2));console.log('Wrote',p);"
 	@touch $(PREFIX)/db/bmad.sqlite
 	@echo "Installed to $(PREFIX)"
 
