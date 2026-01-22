@@ -95,17 +95,33 @@ async function main() {
 
   mcp.registerTool('bmad.log_action', { description: 'Log orchestration action', inputSchema: anyArgs }, withDb((db, input) => tools.logAction(db, input)));
   mcp.registerTool('bmad.set_current_sprint', { description: 'Set current sprint label for project', inputSchema: anyArgs }, withDb((db, input) => tools.setCurrentSprint(db, input)));
+  mcp.registerTool('bmad.set_current_sprint', { description: 'Set current sprint label for project', inputSchema: anyArgs }, withDb((db, input) => tools.setCurrentSprint(db, input)));
 
   // Export
   mcp.registerTool('bmad.export_story_md', { description: 'Export a story to Markdown', inputSchema: anyArgs }, withDb((db, input) => tools.exportStoryMd(db, input, { exportDir })));
 
   mcp.registerTool('bmad.export_project_md', { description: 'Export the project to Markdown files', inputSchema: anyArgs }, withDb((db, input) => tools.exportProjectMd(db, input, { exportDir })));
+  mcp.registerTool('bmad.export_pr_md', { description: 'Export a PR markdown for a story', inputSchema: anyArgs }, withDb((db, input) => tools.exportPrMd(db, input, { exportDir })));
 
   // Import
   mcp.registerTool('bmad.import_project', { description: 'Import a legacy BMAD project from files', inputSchema: anyArgs }, withDb((db, input) => tools.importProject(db, input)));
 
   // Schema Discovery (no DB)
   mcp.registerTool('bmad.get_mcp_schema', { description: 'Return MCP tool schemas (inputs/outputs)', inputSchema: anyArgs }, async () => wrap(SCHEMA.asBundle()));
+  // Additional helpers
+  mcp.registerTool('bmad.update_acceptance_criteria', { description: 'Update acceptance criteria for a story', inputSchema: anyArgs }, withDb((db, input) => tools.updateAcceptanceCriteria(db, input)));
+  mcp.registerTool('bmad.list_stories', { description: 'List stories with filters', inputSchema: anyArgs }, withDb((db, input) => tools.listStories(db, input)));
+  mcp.registerTool('bmad.list_epics', { description: 'List epics for a project', inputSchema: anyArgs }, withDb((db, input) => tools.listEpics(db, input)));
+  mcp.registerTool('bmad.update_epic', { description: 'Create or update an epic', inputSchema: anyArgs }, withDb((db, input) => tools.updateEpic(db, input)));
+  mcp.registerTool('bmad.search_stories', { description: 'Search stories by title/description', inputSchema: anyArgs }, withDb((db, input) => tools.searchStories(db, input)));
+  // Review fix
+  mcp.registerTool('bmad.get_review_backlog', { description: 'List pending review follow-up items', inputSchema: anyArgs }, withDb((db, input) => tools.getReviewBacklog(db, input)));
+  mcp.registerTool('bmad.complete_review_item', { description: 'Complete a review follow-up item', inputSchema: anyArgs }, withDb((db, input) => tools.completeReviewItem(db, input)));
+  mcp.registerTool('bmad.bulk_complete_review', { description: 'Bulk-complete review items', inputSchema: anyArgs }, withDb((db, input) => tools.bulkCompleteReview(db, input)));
+  // Reservations
+  mcp.registerTool('bmad.reserve_task', { description: 'Reserve a task for an agent', inputSchema: anyArgs }, withDb((db, input) => tools.reserveTask(db, input)));
+  mcp.registerTool('bmad.release_task', { description: 'Release a reserved task', inputSchema: anyArgs }, withDb((db, input) => tools.releaseTask(db, input)));
+  mcp.registerTool('bmad.get_reservations', { description: 'List active reservations', inputSchema: anyArgs }, withDb((db, input) => tools.getReservations(db, input)));
 
   // Additional helpers
   mcp.registerTool('bmad.update_acceptance_criteria', { description: 'Update acceptance criteria for a story', inputSchema: anyArgs }, withDb((db, input) => tools.updateAcceptanceCriteria(db, input)));

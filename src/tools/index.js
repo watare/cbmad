@@ -379,6 +379,121 @@ function importProject(db, input) {
   return { success: true, imported: { epics: importedEpics, stories: importedStories, planning_docs: importedPlanning }, warnings };
 }
 
+// ---------- Review Fix Workflow ----------
+function getReviewBacklog(db, input) {
+  const { project_id, story_id, limit = 100 } = input;
+  if (story_id) {
+    const rows = db.prepare(`SELECT idx, description, severity FROM tasks WHERE story_id=? AND is_review_followup=1 AND done=0 ORDER BY idx ASC LIMIT ?`).all(story_id, limit);
+    return { items: rows.map(r => ({ story_id, idx: r.idx, description: r.description, severity: r.severity || null })) };
+  }
+  const rows = db.prepare(`SELECT s.id as story_id, s.key, t.idx, t.description, t.severity
+                           FROM tasks t JOIN stories s ON s.id=t.story_id
+                           WHERE s.project_id=? AND t.is_review_followup=1 AND t.done=0
+                           ORDER BY s.updated_at DESC, t.idx ASC LIMIT ?`).all(project_id, limit);
+  return { items: rows.map(r => ({ story_id: r.story_id, story_key: r.key, idx: r.idx, description: r.description, severity: r.severity || null })) };
+}
+
+function completeReviewItem(db, input) {
+  const { story_id, idx } = input;
+  const res = db.prepare(`UPDATE tasks SET done=1, completed_at=CURRENT_TIMESTAMP WHERE story_id=? AND parent_task_id IS NULL AND idx=? AND is_review_followup=1`).run(story_id, idx);
+  return { success: res.changes > 0 };
+}
+
+function bulkCompleteReview(db, input) {
+  const { story_id, indices } = input;
+  const tx = db.transaction(() => {
+    let n = 0;
+    for (const i of indices || []) {
+      const r = db.prepare(`UPDATE tasks SET done=1, completed_at=CURRENT_TIMESTAMP WHERE story_id=? AND parent_task_id IS NULL AND idx=? AND is_review_followup=1`).run(story_id, i);
+      n += r.changes ? 1 : 0;
+    }
+    return n;
+  });
+  const count = tx();
+  return { success: true, completed: count };
+}
+
+// ---------- Reservations (Multi-agent safety) ----------
+function reserveTask(db, input) {
+  const { story_id, task_idx, agent, ttl_seconds = 1800 } = input;
+  const project = db.prepare('SELECT project_id FROM stories WHERE id=?').get(story_id);
+  if (!project) throw new Error('Story not found');
+  const now = Date.now();
+  const exp = new Date(now + ttl_seconds * 1000).toISOString();
+  const existing = db.prepare('SELECT agent, expires_at FROM reservations WHERE story_id=? AND task_idx=?').get(story_id, task_idx);
+  if (existing) {
+    const expired = new Date(existing.expires_at).getTime() < now;
+    if (!expired && existing.agent !== agent) {
+      return { success: false, reserved_by: existing.agent, expires_at: existing.expires_at };
+    }
+    db.prepare('UPDATE reservations SET agent=?, expires_at=?, created_at=CURRENT_TIMESTAMP WHERE story_id=? AND task_idx=?')
+      .run(agent, exp, story_id, task_idx);
+    return { success: true, story_id, task_idx, agent, expires_at: exp };
+  }
+  db.prepare('INSERT INTO reservations (project_id, story_id, task_idx, agent, expires_at) VALUES (?,?,?,?,?)')
+    .run(project.project_id, story_id, task_idx, agent, exp);
+  return { success: true, story_id, task_idx, agent, expires_at: exp };
+}
+
+function releaseTask(db, input) {
+  const { story_id, task_idx, agent } = input;
+  const row = db.prepare('SELECT agent FROM reservations WHERE story_id=? AND task_idx=?').get(story_id, task_idx);
+  if (!row) return { success: true };
+  if (row.agent !== agent) return { success: false, error: 'not-owner' };
+  db.prepare('DELETE FROM reservations WHERE story_id=? AND task_idx=?').run(story_id, task_idx);
+  return { success: true };
+}
+
+function getReservations(db, input) {
+  const { project_id, story_id } = input;
+  const nowIso = new Date().toISOString();
+  db.prepare('DELETE FROM reservations WHERE expires_at < ?').run(nowIso);
+  let rows;
+  if (story_id) rows = db.prepare('SELECT story_id, task_idx, agent, expires_at FROM reservations WHERE story_id=? ORDER BY created_at DESC').all(story_id);
+  else rows = db.prepare('SELECT story_id, task_idx, agent, expires_at FROM reservations WHERE project_id=? ORDER BY created_at DESC').all(project_id);
+  return { reservations: rows };
+}
+
+// ---------- PR Generation ----------
+function generatePr(db, input) {
+  const { story_id } = input;
+  const ctx = getStoryContext(db, { story_id });
+  const { story, acceptance_criteria, tasks, dev_notes, files_changed, changelog } = ctx;
+  const title = `[${story.key}] ${story.title}`;
+  const lines = [];
+  lines.push(`# ${title}`);
+  lines.push('', story.description || '');
+  lines.push('', '## Acceptance Criteria');
+  for (const ac of acceptance_criteria) lines.push(`- ${ac.met ? '[x]' : '[ ]'} ${ac.criterion || ac}`);
+  lines.push('', '## Implementation Summary');
+  for (const t of tasks) lines.push(`- [${t.done ? 'x':' '}] (${t.idx}) ${t.description}`);
+  if (files_changed?.length) {
+    lines.push('', '## Changed Files');
+    for (const f of files_changed) lines.push(`- ${f.change_type}: ${f.path}`);
+  }
+  if (changelog?.length) {
+    lines.push('', '## Changelog');
+    for (const c of changelog) lines.push(`- ${c.timestamp}: ${c.entry}`);
+  }
+  const body = lines.join('\n');
+  return { title, body };
+}
+
+function exportPrMd(db, input, { exportDir }) {
+  const { story_id, output_path } = input;
+  const s = db.prepare('SELECT key, project_id FROM stories WHERE id=?').get(story_id);
+  if (!s) throw new Error('Story not found');
+  const pr = generatePr(db, { story_id });
+  const proj = db.prepare('SELECT root_path FROM projects WHERE id=?').get(s.project_id);
+  const projectRoot = proj ? proj.root_path : null;
+  const base = projectRoot ? path.join(projectRoot, '_bmad-output') : path.join(exportDir, s.project_id);
+  const defaultPath = path.join(base, 'planning', `PR-${s.key}.md`);
+  const out = output_path || defaultPath;
+  ensureDir(path.dirname(out));
+  fs.writeFileSync(out, `# ${pr.title}\n\n${pr.body}\n`, 'utf8');
+  return { success: true, path: out };
+}
+
 module.exports = {
   registerProject,
   getProjectContext,
@@ -399,6 +514,15 @@ module.exports = {
   exportStoryMd,
   exportProjectMd,
   importProject,
+  // new
+  getReviewBacklog,
+  completeReviewItem,
+  bulkCompleteReview,
+  reserveTask,
+  releaseTask,
+  getReservations,
+  generatePr,
+  exportPrMd,
 };
 
 // --- Additional workflow helpers ---

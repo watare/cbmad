@@ -93,9 +93,20 @@ function migrate(db) {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS reservations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL,
+      story_id TEXT NOT NULL,
+      task_idx INTEGER NOT NULL,
+      agent TEXT NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(story_id, task_idx)
+    )`,
     `CREATE INDEX IF NOT EXISTS idx_epics_project ON epics(project_id)` ,
     `CREATE INDEX IF NOT EXISTS idx_stories_project ON stories(project_id)` ,
-    `CREATE INDEX IF NOT EXISTS idx_tasks_story ON tasks(story_id)`
+    `CREATE INDEX IF NOT EXISTS idx_tasks_story ON tasks(story_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_res_project ON reservations(project_id)`
   ];
   db.transaction(() => { stmts.forEach(sql => db.prepare(sql).run()); })();
 }
