@@ -329,6 +329,7 @@ bmad-mcp register-project
 - Runner BMAD: `bmad.install_bmad_method`, `bmad.list_workflows`, `bmad.open_workflow`, `bmad.next_step`, `bmad.generate_workflow_mapping`
   - Optionnels: `bmad.list_optional_workflows`, `bmad.save_workflow_output`
   - Gates: `bmad.list_phase_gates`, `bmad.set_phase_gate`, `bmad.recommend_phase_gates`
+  - Décision simple (1/2/3): `bmad.submit_decision({ project_id, gate_key, decision: 1|2|3, notes?, doc_type?, updated_content? })`
   - Optional docs versioning: `bmad.product_brief_new`, `bmad.get_product_brief_versions`, `bmad.switch_product_brief_version`, `bmad.nfr_new`, `bmad.get_nfr_versions`, `bmad.switch_nfr_version`, `bmad.test_design_new`, `bmad.get_test_design_versions`, `bmad.switch_test_design_version`, `bmad.atdd_new`, `bmad.get_atdd_versions`, `bmad.switch_atdd_version`, `bmad.trace_new`, `bmad.get_trace_versions`, `bmad.switch_trace_version`, `bmad.ci_plan_new`, `bmad.get_ci_plan_versions`, `bmad.switch_ci_plan_version`, `bmad.tech_spec_new`, `bmad.get_tech_spec_versions`, `bmad.switch_tech_spec_version`.
 - Story: `bmad.get_next_story`, `bmad.get_story_context`, `bmad.get_story_summary`, `bmad.create_story`, `bmad.update_story_status`, `bmad.update_story`, `bmad.delete_story`, `bmad.story_snapshot`, `bmad.get_story_versions`, `bmad.switch_story_version`
 - Tasks: `bmad.complete_task`, `bmad.add_review_tasks`

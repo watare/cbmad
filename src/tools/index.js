@@ -2270,10 +2270,47 @@ function viewGateCardMd(db, input) {
   else { for (const n of q) lines.push(`- ${n.content}`); }
   lines.push('');
   lines.push('## Que souhaitez-vous faire ?');
-  lines.push('1. Approuver → `bmad.set_phase_gate({ project_id, gate_key: \'' + gate_key + '\', status: \"answered\", notes: \"...\" })`');
-  lines.push('2. Rejeter → Mettez à jour le document via `bmad.update_planning_doc({ type: \'' + doc_type + '\', content: ... })`');
-  lines.push('3. Questions → `bmad.start_research_session({ project_id, topic: \"Clarifying Questions\" })` puis `bmad.add_research_note({ session_id, type: \"question\", content })`');
+  lines.push('1. Approuver → `bmad.submit_decision({ project_id, gate_key: ''' + gate_key + ''', decision: 1, notes: "..." })`
+  lines.push('2. Rejeter → `bmad.submit_decision({ project_id, gate_key: ''' + gate_key + ''', decision: 2, doc_type: ''' + doc_type + ''', updated_content: "..." })`
+  lines.push('3. Questions → `bmad.submit_decision({ project_id, gate_key: ''' + gate_key + ''', decision: 3 })`
   return { __format: 'markdown', markdown: lines.join('\n') };
 }
 
 module.exports.viewGateCardMd = viewGateCardMd;
+
+// ---------- Simple Decision Submitter (1/2/3) ----------
+function normalizeDecision(decision) {
+  const d = String(decision || '').toLowerCase().trim();
+  if (d === '1' || d.startsWith('approve')) return 'approve';
+  if (d === '2' || d.startsWith('reject')) return 'reject';
+  if (d === '3' || d.startsWith('question')) return 'questions';
+  return 'unknown';
+}
+
+function submitDecision(db, input) {
+  const { project_id, gate_key, decision, notes, doc_type = 'prd', updated_content } = input;
+  if (!project_id || !gate_key) throw new Error('project_id, gate_key required');
+  const d = normalizeDecision(decision);
+  if (d === 'approve') {
+    setPhaseGate(db, { project_id, gate_key, status: 'answered', notes: notes || null });
+    logAction(db, { project_id, type: 'decision', content: `Gate ${gate_key} approved${notes ? ': ' + notes : ''}` });
+    return { success: true, action: 'approved', gate_key };
+  } else if (d === 'reject') {
+    if (updated_content) {
+      updatePlanningDoc(db, { project_id, type: doc_type, content: updated_content, generate_summary: true });
+      logAction(db, { project_id, type: 'decision', content: `Gate ${gate_key} rejected and doc ${doc_type} updated` });
+    } else if (notes) {
+      logAction(db, { project_id, type: 'decision', content: `Gate ${gate_key} rejected: ${notes}` });
+    }
+    return { success: true, action: 'rejected', gate_key };
+  } else if (d === 'questions') {
+    const topic = `Clarifying Questions — ${gate_key}`;
+    const sess = startResearchSession(db, { project_id, topic });
+    if (notes) addResearchNote(db, { session_id: sess.session_id, type: 'question', content: notes });
+    logAction(db, { project_id, type: 'decision', content: `Gate ${gate_key} questions started (session ${sess.session_id})` });
+    return { success: true, action: 'questions', session_id: sess.session_id };
+  }
+  return { success: false, error: 'unknown-decision', accepted: ['1','2','3','approve','reject','questions'] };
+}
+
+module.exports.submitDecision = submitDecision;
