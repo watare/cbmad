@@ -147,6 +147,27 @@ async function main() {
   mcp.registerTool('bmad.prd_new', { description: 'Create a new PRD version and set current', inputSchema: anyArgs }, withDb((db, input) => tools.prdNew(db, input)));
   mcp.registerTool('bmad.get_prd_versions', { description: 'List PRD versions', inputSchema: anyArgs }, withDb((db, input) => tools.getPrdVersions(db, input)));
   mcp.registerTool('bmad.switch_prd_version', { description: 'Switch current PRD to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchPrdVersion(db, input)));
+  // Epics versioning
+  mcp.registerTool('bmad.epic_new_version', { description: 'Create a new epic version', inputSchema: anyArgs }, withDb((db, input) => tools.epicNewVersion(db, input)));
+  mcp.registerTool('bmad.get_epic_versions', { description: 'List epic versions', inputSchema: anyArgs }, withDb((db, input) => tools.getEpicVersions(db, input)));
+  mcp.registerTool('bmad.switch_epic_version', { description: 'Switch epic to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchEpicVersion(db, input)));
+  mcp.registerTool('bmad.add_epic_changelog', { description: 'Add changelog entry for epic', inputSchema: anyArgs }, withDb((db, input) => tools.addEpicChangelog(db, input)));
+  mcp.registerTool('bmad.get_epic_changelog', { description: 'Get epic changelog', inputSchema: anyArgs }, withDb((db, input) => tools.getEpicChangelog(db, input)));
+  // Review sessions
+  mcp.registerTool('bmad.start_review', { description: 'Start a code review session', inputSchema: anyArgs }, withDb((db, input) => tools.startReview(db, input)));
+  mcp.registerTool('bmad.add_review_finding', { description: 'Add a code review finding', inputSchema: anyArgs }, withDb((db, input) => tools.addReviewFinding(db, input)));
+  mcp.registerTool('bmad.update_review_finding', { description: 'Update a finding status', inputSchema: anyArgs }, withDb((db, input) => tools.updateReviewFinding(db, input)));
+  mcp.registerTool('bmad.close_review', { description: 'Close a review session', inputSchema: anyArgs }, withDb((db, input) => tools.closeReview(db, input)));
+  mcp.registerTool('bmad.list_reviews', { description: 'List review sessions', inputSchema: anyArgs }, withDb((db, input) => tools.listReviews(db, input)));
+  mcp.registerTool('bmad.review_approve', { description: 'Approve a review session', inputSchema: anyArgs }, withDb((db, input) => tools.reviewApprove(db, input)));
+  mcp.registerTool('bmad.review_reject', { description: 'Reject a review session', inputSchema: anyArgs }, withDb((db, input) => tools.reviewReject(db, input)));
+  // TEA / QA
+  mcp.registerTool('bmad.create_test_plan', { description: 'Create a test plan', inputSchema: anyArgs }, withDb((db, input) => tools.createTestPlan(db, input)));
+  mcp.registerTool('bmad.add_test_case', { description: 'Add a test case', inputSchema: anyArgs }, withDb((db, input) => tools.addTestCase(db, input)));
+  mcp.registerTool('bmad.update_test_case', { description: 'Update a test case', inputSchema: anyArgs }, withDb((db, input) => tools.updateTestCase(db, input)));
+  mcp.registerTool('bmad.record_test_run', { description: 'Record a test run', inputSchema: anyArgs }, withDb((db, input) => tools.recordTestRun(db, input)));
+  mcp.registerTool('bmad.record_test_result', { description: 'Record a test result', inputSchema: anyArgs }, withDb((db, input) => tools.recordTestResult(db, input)));
+  mcp.registerTool('bmad.get_test_coverage', { description: 'Get test coverage summary for a plan', inputSchema: anyArgs }, withDb((db, input) => tools.getTestCoverage(db, input)));
   // Review fix
   mcp.registerTool('bmad.get_review_backlog', { description: 'List pending review follow-up items', inputSchema: anyArgs }, withDb((db, input) => tools.getReviewBacklog(db, input)));
   mcp.registerTool('bmad.complete_review_item', { description: 'Complete a review follow-up item', inputSchema: anyArgs }, withDb((db, input) => tools.completeReviewItem(db, input)));

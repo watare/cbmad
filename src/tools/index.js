@@ -921,3 +921,167 @@ function switchPrdVersion(db, input) {
 module.exports.prdNew = prdNew;
 module.exports.getPrdVersions = getPrdVersions;
 module.exports.switchPrdVersion = switchPrdVersion;
+
+// ---------- Epic Versioning ----------
+function epicNewVersion(db, input) {
+  const { project_id, epic_number, version, title, description, status } = input;
+  db.prepare('INSERT OR REPLACE INTO epic_versions (project_id, epic_number, version, title, description, status) VALUES (?,?,?,?,?,?)')
+    .run(project_id, epic_number, version, title || null, description || null, status || null);
+  // Optionally update current epic fields to reflect latest
+  const epic = db.prepare('SELECT id FROM epics WHERE project_id=? AND number=?').get(project_id, epic_number);
+  if (epic) {
+    db.prepare('UPDATE epics SET title=COALESCE(?,title), description=COALESCE(?,description), status=COALESCE(?,status), updated_at=CURRENT_TIMESTAMP WHERE id=?')
+      .run(title || null, description || null, status || null, epic.id);
+  }
+  return { success: true };
+}
+
+function getEpicVersions(db, input) {
+  const { project_id, epic_number } = input;
+  const rows = db.prepare('SELECT version, title, status, created_at FROM epic_versions WHERE project_id=? AND epic_number=? ORDER BY id DESC').all(project_id, epic_number);
+  return { versions: rows };
+}
+
+function switchEpicVersion(db, input) {
+  const { project_id, epic_number, version } = input;
+  const row = db.prepare('SELECT title, description, status FROM epic_versions WHERE project_id=? AND epic_number=? AND version=?').get(project_id, epic_number, version);
+  if (!row) throw new Error('Epic version not found');
+  const epic = db.prepare('SELECT id FROM epics WHERE project_id=? AND number=?').get(project_id, epic_number);
+  if (!epic) throw new Error('Epic not found');
+  db.prepare('UPDATE epics SET title=?, description=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+    .run(row.title || null, row.description || null, row.status || null, epic.id);
+  return { success: true };
+}
+
+function addEpicChangelog(db, input) {
+  const { project_id, epic_number, entry } = input;
+  db.prepare('INSERT INTO epic_changelog (project_id, epic_number, entry) VALUES (?,?,?)').run(project_id, epic_number, entry);
+  return { success: true };
+}
+
+function getEpicChangelog(db, input) {
+  const { project_id, epic_number, limit = 100 } = input;
+  const rows = db.prepare('SELECT entry, created_at FROM epic_changelog WHERE project_id=? AND epic_number=? ORDER BY id DESC LIMIT ?').all(project_id, epic_number, limit);
+  return { entries: rows };
+}
+
+// ---------- Review Sessions ----------
+function startReview(db, input) {
+  const { project_id, story_id, reviewer } = input;
+  const id = `${project_id}:rev-${Date.now()}`;
+  db.prepare("INSERT INTO review_sessions (id, project_id, story_id, reviewer, status) VALUES (?,?,?,?, 'open')")
+    .run(id, project_id, story_id, reviewer || null);
+  return { success: true, session_id: id };
+}
+
+function addReviewFinding(db, input) {
+  const { session_id, severity, description, file, line } = input;
+  const maxIdx = db.prepare('SELECT COALESCE(MAX(idx),0) AS m FROM review_findings WHERE session_id=?').get(session_id).m;
+  const idx = maxIdx + 1;
+  db.prepare("INSERT INTO review_findings (session_id, idx, severity, description, file, line, status) VALUES (?,?,?,?,?,?,'open')")
+    .run(session_id, idx, severity || null, description, file || null, line || null);
+  return { success: true, idx };
+}
+
+function updateReviewFinding(db, input) {
+  const { session_id, idx, status } = input;
+  const res = db.prepare('UPDATE review_findings SET status=? WHERE session_id=? AND idx=?').run(status, session_id, idx);
+  return { success: res.changes > 0 };
+}
+
+function closeReview(db, input) {
+  const { session_id, outcome } = input;
+  db.prepare('UPDATE review_sessions SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(outcome || 'closed', session_id);
+  return { success: true };
+}
+
+function listReviews(db, input) {
+  const { project_id, story_id, limit = 50 } = input;
+  let sql = 'SELECT id, story_id, reviewer, status, created_at FROM review_sessions WHERE project_id=?';
+  const params = [project_id];
+  if (story_id) { sql += ' AND story_id=?'; params.push(story_id); }
+  sql += ' ORDER BY id DESC LIMIT ?'; params.push(limit);
+  const rows = db.prepare(sql).all(...params);
+  return { reviews: rows };
+}
+
+function reviewApprove(db, input) {
+  const { session_id, role } = input;
+  db.prepare('UPDATE review_sessions SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run('approved', session_id);
+  return { success: true };
+}
+
+function reviewReject(db, input) {
+  const { session_id, reason } = input;
+  db.prepare('UPDATE review_sessions SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run('rejected', session_id);
+  return { success: true };
+}
+
+// ---------- TEA / Test Engineering ----------
+function createTestPlan(db, input) {
+  const { project_id, story_id, title, content } = input;
+  const id = `${project_id}:plan-${Date.now()}`;
+  db.prepare('INSERT INTO test_plans (id, project_id, story_id, title, content, summary) VALUES (?,?,?,?,?,?)')
+    .run(id, project_id, story_id || null, title, content || null, summarize(content || '', 800));
+  return { success: true, plan_id: id };
+}
+
+function addTestCase(db, input) {
+  const { plan_id, key, title, steps, expected } = input;
+  db.prepare("INSERT INTO test_cases (plan_id, key, title, steps, expected, status) VALUES (?,?,?,?,?, 'unverified')")
+    .run(plan_id, key || null, title, steps || null, expected || null);
+  return { success: true };
+}
+
+function updateTestCase(db, input) {
+  const { case_id, title, steps, expected, status } = input;
+  const fields = [];
+  const vals = [];
+  if (title != null) { fields.push('title=?'); vals.push(title); }
+  if (steps != null) { fields.push('steps=?'); vals.push(steps); }
+  if (expected != null) { fields.push('expected=?'); vals.push(expected); }
+  if (status != null) { fields.push('status=?'); vals.push(status); }
+  if (!fields.length) return { success: true };
+  vals.push(case_id);
+  db.prepare(`UPDATE test_cases SET ${fields.join(', ')} WHERE id=?`).run(...vals);
+  return { success: true };
+}
+
+function recordTestRun(db, input) {
+  const { plan_id, run_id } = input;
+  db.prepare('INSERT OR IGNORE INTO test_runs (plan_id, run_id) VALUES (?,?)').run(plan_id, run_id);
+  return { success: true };
+}
+
+function recordTestResult(db, input) {
+  const { case_id, run_id, status, notes } = input;
+  db.prepare('INSERT INTO test_results (case_id, run_id, status, notes) VALUES (?,?,?,?)').run(case_id, run_id, status, notes || null);
+  return { success: true };
+}
+
+function getTestCoverage(db, input) {
+  const { plan_id } = input;
+  const rows = db.prepare('SELECT status, COUNT(*) AS n FROM test_cases WHERE plan_id=? GROUP BY status').all(plan_id);
+  const byStatus = Object.fromEntries(rows.map(r => [r.status, r.n]));
+  const total = db.prepare('SELECT COUNT(*) AS n FROM test_cases WHERE plan_id=?').get(plan_id).n;
+  return { total, by_status: byStatus };
+}
+
+module.exports.epicNewVersion = epicNewVersion;
+module.exports.getEpicVersions = getEpicVersions;
+module.exports.switchEpicVersion = switchEpicVersion;
+module.exports.addEpicChangelog = addEpicChangelog;
+module.exports.getEpicChangelog = getEpicChangelog;
+module.exports.startReview = startReview;
+module.exports.addReviewFinding = addReviewFinding;
+module.exports.updateReviewFinding = updateReviewFinding;
+module.exports.closeReview = closeReview;
+module.exports.listReviews = listReviews;
+module.exports.reviewApprove = reviewApprove;
+module.exports.reviewReject = reviewReject;
+module.exports.createTestPlan = createTestPlan;
+module.exports.addTestCase = addTestCase;
+module.exports.updateTestCase = updateTestCase;
+module.exports.recordTestRun = recordTestRun;
+module.exports.recordTestResult = recordTestResult;
+module.exports.getTestCoverage = getTestCoverage;

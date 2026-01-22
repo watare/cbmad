@@ -11,7 +11,6 @@ function getDb(dbPath) {
 }
 
 function migrate(db) {
-  // idempotent schema creation
   const stmts = [
     `CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
@@ -136,16 +135,76 @@ function migrate(db) {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(story_id, task_idx)
     )`,
-    `CREATE INDEX IF NOT EXISTS idx_epics_project ON epics(project_id)` ,
-    `CREATE INDEX IF NOT EXISTS idx_stories_project ON stories(project_id)` ,
-    `CREATE INDEX IF NOT EXISTS idx_tasks_story ON tasks(story_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_res_project ON reservations(project_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_docs_project ON documents(project_id)`
-  ];
-  db.transaction(() => { stmts.forEach(sql => db.prepare(sql).run()); })();
-}
-
-module.exports = { getDb, migrate };
+    `CREATE TABLE IF NOT EXISTS epic_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      epic_number INTEGER NOT NULL,
+      version TEXT NOT NULL,
+      title TEXT,
+      description TEXT,
+      status TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(project_id, epic_number, version)
+    )`,
+    `CREATE TABLE IF NOT EXISTS epic_changelog (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL,
+      epic_number INTEGER NOT NULL,
+      entry TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS review_sessions (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      story_id TEXT NOT NULL,
+      reviewer TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS review_findings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL REFERENCES review_sessions(id) ON DELETE CASCADE,
+      idx INTEGER NOT NULL,
+      severity TEXT,
+      description TEXT NOT NULL,
+      file TEXT,
+      line INTEGER,
+      status TEXT NOT NULL DEFAULT 'open'
+    )`,
+    `CREATE TABLE IF NOT EXISTS test_plans (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      story_id TEXT,
+      title TEXT NOT NULL,
+      content TEXT,
+      summary TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS test_cases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_id TEXT NOT NULL REFERENCES test_plans(id) ON DELETE CASCADE,
+      key TEXT,
+      title TEXT NOT NULL,
+      steps TEXT,
+      expected TEXT,
+      status TEXT DEFAULT 'unverified'
+    )`,
+    `CREATE TABLE IF NOT EXISTS test_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_id TEXT NOT NULL REFERENCES test_plans(id) ON DELETE CASCADE,
+      run_id TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(plan_id, run_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS test_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      case_id INTEGER NOT NULL REFERENCES test_cases(id) ON DELETE CASCADE,
+      run_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
     `CREATE TABLE IF NOT EXISTS bugs (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id),
@@ -164,4 +223,17 @@ module.exports = { getDb, migrate };
       bug_id TEXT NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
       file_path TEXT NOT NULL
     )`,
-    `CREATE INDEX IF NOT EXISTS idx_bugs_project ON bugs(project_id)` ,
+    `CREATE INDEX IF NOT EXISTS idx_epics_project ON epics(project_id)` ,
+    `CREATE INDEX IF NOT EXISTS idx_stories_project ON stories(project_id)` ,
+    `CREATE INDEX IF NOT EXISTS idx_tasks_story ON tasks(story_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_res_project ON reservations(project_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_docs_project ON documents(project_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_epic_versions ON epic_versions(project_id, epic_number)` ,
+    `CREATE INDEX IF NOT EXISTS idx_epic_changelog ON epic_changelog(project_id, epic_number)` ,
+    `CREATE INDEX IF NOT EXISTS idx_review_findings_session ON review_findings(session_id)` ,
+    `CREATE INDEX IF NOT EXISTS idx_bugs_project ON bugs(project_id)`
+  ];
+  db.transaction(() => { stmts.forEach(sql => db.prepare(sql).run()); })();
+}
+
+module.exports = { getDb, migrate };
