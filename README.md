@@ -1,0 +1,126 @@
+BMAD MCP Server
+
+Objectif
+- Centraliser le framework BMAD dans un serveur MCP unique (Node.js) avec persistance SQLite et exports Markdown.
+- Réduire la consommation tokens en exposant des tools MCP au lieu de recharger le framework et les fichiers à chaque session.
+
+Architecture
+- Base de données: SQLite (fichier unique), accessible via better-sqlite3.
+- Exports: Markdown générés à la demande ou après mutation, lecture humaine, non source de vérité.
+- Installation: dans `~/.config/bmad-server/` (unique par utilisateur).
+- LLM: interagit uniquement via tools MCP (pas de parsing de gros fichiers).
+
+Chemins
+- Serveur MCP: `~/.config/bmad-server/server.js`
+- Base SQLite: `~/.config/bmad-server/db/bmad.sqlite`
+- Exports: `~/.config/bmad-server/exports/`
+- Config MCP (Claude): `~/.claude/mcp-servers.json`
+
+Installation (1 commande)
+- Prérequis: Node.js >= 18, `~/.local/bin` dans le PATH (optionnel), accès à `~/.config`
+- Étapes:
+  1) Cloner le repo puis: `make install`
+     - Installe le serveur dans `~/.config/bmad-server`
+     - Déclare le MCP `bmad` dans `~/.claude/mcp-servers.json`
+     - Génère le schéma MCP: `~/.config/bmad-server/schemas/mcp.schema.json`
+     - Crée un shim CLI `~/.local/bin/bmad-mcp` (si présent)
+     - Crée/complète `~/.claude/CLAUDE.md` (si manquant)
+  2) Vérifier: `bmad-mcp doctor` (ou `npx bmad-mcp doctor`)
+
+Installation globale (quand publié)
+- `npm i -g @bmad/mcp-server`
+- `bmad-mcp init`
+
+Utilisation côté projet
+- Ajouter un fichier léger `bmad.config.yaml` au niveau racine du projet (identité, nom, chemin), par exemple:
+
+  project_id: gridmv
+  name: GridMV Power Analysis
+  root_path: /home/ubuntu/gridmv
+  config:
+    user_name: alice
+    user_skill_level: expert
+    communication_language: fr
+
+- En session Claude: utiliser les tools MCP exposés (ex: `bmad.register_project`, `bmad.get_next_story`, etc.).
+- Les exports humains se trouvent dans `_bmad-output/` du projet si vous les demandez explicitement via `bmad.export_project_md` en définissant `output_dir` vers ce dossier.
+
+Créer un nouveau projet (init rapide)
+- Depuis la racine du projet: `bmad-mcp project-init`
+  - Génère `bmad.config.yaml` et prépare `_bmad-output/`
+  - À l’ouverture dans Claude: exécuter `bmad.register_project` (le maître le fait en premier)
+- Option Makefile projet: copiez `templates/project/Makefile` dans votre repo, puis `make bmad-init`
+
+Où tourne le MCP ?
+- En mode MCP, Claude lance le binaire configuré (ici `node ~/.config/bmad-server/server.js`) et communique via stdio.
+- Pas de démon permanent nécessaire. Un seul serveur par utilisateur.
+
+Stockage Git
+- Recommmandé: versionner ce repo serveur dans un dépôt Git dédié (infrastructure BMAD).
+- Dans les projets applicatifs: ne pas dupliquer le framework. Versionner uniquement `bmad.config.yaml` et, si souhaité, les exports `_bmad-output/` (en lecture seule, car non source de vérité).
+
+Déploiement/Make
+- Ce repo inclut un `Makefile` pour opérations courantes locales:
+  - `make install-local` : copie dans `~/.config/bmad-server`
+  - `make db-backup` : sauvegarde `bmad.sqlite` dans `~/.config/bmad-server/db/backup-YYYYMMDDHHMM.sqlite`
+  - `make db-vacuum` : compaction de la base
+  - `make uninstall` : supprime l’installation (non destructif pour la DB)
+
+Mise à jour
+- Après mise à jour du package/npm: `bmad-mcp init` re-copie `server.js` si nécessaire. Les migrations DB sont idempotentes (appliquées au démarrage du serveur).
+
+Sécurité & Permissions
+- Le serveur opère sur des chemins fournis par l’utilisateur (ex: `root_path`). Ils doivent être fiables (projets locaux).
+- Les chemins sont résolus sans droits élevés; pas d’exécution de code externe.
+
+Angles morts validés (principaux)
+- Concurrence: `better-sqlite3` est synchrone, serveur MCP mono-process. OK pour usage local, non multi-process.
+- Schéma versionné: migrations idempotentes incluses; prévoir versions futures (PRAGMA user_version si besoin).
+- Import tolérant: le parseur Markdown est minimal; à renforcer pour des projets hétérogènes.
+- Export volumineux: génération à la demande (outil `export_project_md`) pour éviter I/O non nécessaires.
+- Windows: chemins `~` et `~/.config` supposent Unix-like. Ajouter support `%APPDATA%` si nécessaire.
+- Validation: JSON Schema minimal via SDK; peut être étendu avec `jsonschema`.
+
+Outils MCP implémentés (v0)
+- Project: `bmad.register_project`, `bmad.get_project_context`
+- Story: `bmad.get_next_story`, `bmad.get_story_context`, `bmad.get_story_summary`, `bmad.create_story`, `bmad.update_story_status`
+- Tasks: `bmad.complete_task`, `bmad.add_review_tasks`
+- Notes & Fichiers: `bmad.add_dev_note`, `bmad.register_files`, `bmad.add_changelog_entry`
+- Planning: `bmad.get_planning_doc`, `bmad.update_planning_doc`
+- Sprint: `bmad.get_sprint_status`, `bmad.log_action`
+- Export: `bmad.export_story_md`, `bmad.export_project_md`
+- Import: `bmad.import_project` (stub tolérant)
+
+Schéma MCP (JSON Schema)
+- Découverte via tool: `bmad.get_mcp_schema` (retourne le bundle inputs/outputs de tous les tools)
+- Export local: `bmad-mcp schema` écrit `~/.config/bmad-server/schemas/mcp.schema.json`
+- Usage: utile pour générer de la doc, valider des payloads, et outiller vos agents.
+
+Variables d’environnement
+- `BMAD_DB_PATH` (défaut: `~/.config/bmad-server/db/bmad.sqlite`)
+- `BMAD_LOG_LEVEL` (info|silent, défaut: info)
+- `BMAD_EXPORT_DIR` (défaut: `~/.config/bmad-server/exports`)
+
+Maintenance
+- Sauvegarde: `make db-backup` ou copie du fichier SQLite à froid.
+- Nettoyage: `make db-vacuum` (VACUUM) périodique.
+- Logs: table `logs` exportable en Markdown.
+
+Intégration Claude (MCP)
+Mettre à jour `~/.claude/mcp-servers.json` (fait par `bmad-mcp init`) :
+
+{
+  "bmad": {
+    "command": "node",
+    "args": ["~/.config/bmad-server/server.js"],
+    "env": {
+      "BMAD_DB_PATH": "~/.config/bmad-server/db/bmad.sqlite",
+      "BMAD_LOG_LEVEL": "info"
+    }
+  }
+}
+
+Roadmap
+- Parser d’import amélioré (planning/implementation-artifacts) + détection des doublons.
+- Export automatique sur mutation (configurable).
+- Multi-utilisateur (déport DB + auth) si besoin futur.

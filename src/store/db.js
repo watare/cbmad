@@ -1,0 +1,103 @@
+const Database = require('better-sqlite3');
+
+function getDb(dbPath) {
+  const db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = NORMAL');
+  db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
+  db.pragma('temp_store = MEMORY');
+  return db;
+}
+
+function migrate(db) {
+  // idempotent schema creation
+  const stmts = [
+    `CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      root_path TEXT NOT NULL,
+      config JSON,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS epics (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT DEFAULT 'planned',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS stories (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      epic_id TEXT REFERENCES epics(id),
+      key TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT DEFAULT 'draft',
+      acceptance_criteria JSON,
+      dev_notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(project_id, key)
+    )`,
+    `CREATE TABLE IF NOT EXISTS tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      parent_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+      idx INTEGER NOT NULL,
+      description TEXT NOT NULL,
+      done BOOLEAN DEFAULT FALSE,
+      is_review_followup BOOLEAN DEFAULT FALSE,
+      severity TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      completed_at TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS story_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL,
+      change_type TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS changelog (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      entry TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      story_id TEXT REFERENCES stories(id),
+      type TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS sprint_status (
+      project_id TEXT PRIMARY KEY REFERENCES projects(id),
+      current_sprint TEXT,
+      status_data JSON,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS planning_docs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      type TEXT NOT NULL,
+      content TEXT,
+      summary TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_epics_project ON epics(project_id)` ,
+    `CREATE INDEX IF NOT EXISTS idx_stories_project ON stories(project_id)` ,
+    `CREATE INDEX IF NOT EXISTS idx_tasks_story ON tasks(story_id)`
+  ];
+  db.transaction(() => { stmts.forEach(sql => db.prepare(sql).run()); })();
+}
+
+module.exports = { getDb, migrate };

@@ -1,0 +1,7 @@
+project_id: smoke-project
+name: smoke-project
+root_path: /home/ubuntu/cbmad/smoke-project
+config:
+  user_name: your-name
+  user_skill_level: expert
+  communication_language: fr

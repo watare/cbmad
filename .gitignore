@@ -1,0 +1,20 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn.lock
+
+# OS
+.DS_Store
+
+# BMAD exports (human-readable)
+_bmad-output/
+smoke-project/_bmad-output/
+
+# Local configs
+.env
+.claude/
+
+# Coverage/temp
+coverage/
+tmp/
+

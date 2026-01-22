@@ -1,0 +1,33 @@
+{
+  "name": "@bmad/mcp-server",
+  "version": "0.1.0",
+  "description": "BMAD MCP Server with SQLite backing store and CLI installer",
+  "bin": {
+    "bmad-mcp": "bin/bmad-mcp.js"
+  },
+  "type": "commonjs",
+  "main": "src/server.js",
+  "files": [
+    "src/",
+    "bin/",
+    "schemas/",
+    "README.md",
+    "LICENSE",
+    "Makefile"
+  ],
+  "scripts": {
+    "start": "node src/server.js",
+    "init-local": "node bin/bmad-mcp.js init",
+    "doctor": "node bin/bmad-mcp.js doctor",
+    "smoke": "node scripts/smoke.js"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.4.0",
+    "better-sqlite3": "^9.4.0",
+    "jsonschema": "^1.4.1",
+    "yaml": "^2.5.0"
+  }
+}

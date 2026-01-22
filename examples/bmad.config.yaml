@@ -1,0 +1,8 @@
+project_id: your-project
+name: Your Project Name
+root_path: /absolute/path/to/your/project
+config:
+  user_name: your-name
+  user_skill_level: expert
+  communication_language: fr
+

@@ -1,0 +1,7 @@
+project_id: cbmad
+name: cbmad
+root_path: /home/ubuntu/cbmad
+config:
+  user_name: your-name
+  user_skill_level: expert
+  communication_language: fr
