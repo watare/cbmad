@@ -90,6 +90,7 @@ Outils MCP implémentés (v0)
 - Sprint: `bmad.get_sprint_status`, `bmad.log_action`
 - Export: `bmad.export_story_md`, `bmad.export_project_md`
 - Import: `bmad.import_project` (stub tolérant)
+ - Compléments: `bmad.set_current_sprint`, `bmad.update_acceptance_criteria`, `bmad.list_stories`, `bmad.list_epics`, `bmad.update_epic`, `bmad.search_stories`
 
 Schéma MCP (JSON Schema)
 - Découverte via tool: `bmad.get_mcp_schema` (retourne le bundle inputs/outputs de tous les tools)

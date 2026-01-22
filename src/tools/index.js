@@ -400,3 +400,64 @@ module.exports = {
   exportProjectMd,
   importProject,
 };
+
+// --- Additional workflow helpers ---
+function setCurrentSprint(db, input) {
+  const { project_id, current_sprint } = input;
+  db.prepare(`INSERT INTO sprint_status (project_id, current_sprint, status_data, updated_at)
+              VALUES (?,?,NULL,CURRENT_TIMESTAMP)
+              ON CONFLICT(project_id) DO UPDATE SET current_sprint=excluded.current_sprint, updated_at=CURRENT_TIMESTAMP`).run(project_id, current_sprint || null);
+  return { success: true, current_sprint: current_sprint || null };
+}
+
+function updateAcceptanceCriteria(db, input) {
+  const { story_id, acceptance_criteria } = input;
+  const s = db.prepare('SELECT id FROM stories WHERE id=?').get(story_id);
+  if (!s) throw new Error('Story not found');
+  const ac = Array.isArray(acceptance_criteria) ? acceptance_criteria : [];
+  db.prepare('UPDATE stories SET acceptance_criteria=json(?), updated_at=CURRENT_TIMESTAMP WHERE id=?').run(JSON.stringify(ac), story_id);
+  return { success: true };
+}
+
+function listStories(db, input) {
+  const { project_id, status, epic_number, limit = 50, offset = 0 } = input;
+  let sql = `SELECT s.key, s.title, s.status, e.number as epic_number
+             FROM stories s LEFT JOIN epics e ON s.epic_id=e.id
+             WHERE s.project_id=?`;
+  const params = [project_id];
+  if (status) { sql += ' AND s.status=?'; params.push(status); }
+  if (epic_number != null) { sql += ' AND e.number=?'; params.push(epic_number); }
+  sql += ' ORDER BY s.updated_at DESC LIMIT ? OFFSET ?'; params.push(limit, offset);
+  const rows = db.prepare(sql).all(...params);
+  return { stories: rows };
+}
+
+function listEpics(db, input) {
+  const { project_id } = input;
+  const rows = db.prepare('SELECT number, title, status FROM epics WHERE project_id=? ORDER BY number ASC').all(project_id);
+  return { epics: rows };
+}
+
+function updateEpic(db, input) {
+  const { project_id, number, title, description, status } = input;
+  const id = `${project_id}:epic-${number}`;
+  db.prepare(`INSERT INTO epics (id, project_id, number, title, description, status)
+              VALUES (?,?,?,?,?,?)
+              ON CONFLICT(id) DO UPDATE SET title=COALESCE(excluded.title, epics.title), description=COALESCE(excluded.description, epics.description), status=COALESCE(excluded.status, epics.status), updated_at=CURRENT_TIMESTAMP`)
+    .run(id, project_id, number, title || null, description || null, status || null);
+  return { success: true };
+}
+
+function searchStories(db, input) {
+  const { project_id, query, limit = 50 } = input;
+  const q = `%${query}%`;
+  const rows = db.prepare(`SELECT key, title, status FROM stories WHERE project_id=? AND (title LIKE ? OR COALESCE(description,'') LIKE ?) ORDER BY updated_at DESC LIMIT ?`).all(project_id, q, q, limit);
+  return { stories: rows };
+}
+
+module.exports.setCurrentSprint = setCurrentSprint;
+module.exports.updateAcceptanceCriteria = updateAcceptanceCriteria;
+module.exports.listStories = listStories;
+module.exports.listEpics = listEpics;
+module.exports.updateEpic = updateEpic;
+module.exports.searchStories = searchStories;
