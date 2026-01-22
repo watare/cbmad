@@ -335,18 +335,28 @@ function exportProjectMd(db, input, { exportDir }) {
 // ---------- Import (stub: tolerant, minimal) ----------
 function importProject(db, input) {
   const { project_id, root_path, bmad_output_path } = input;
-  registerProject(db, { id: project_id, name: project_id, root_path });
-  const outDir = bmad_output_path || path.join(root_path, '_bmad-output');
+  const root = root_path || (db.prepare('SELECT root_path FROM projects WHERE id=?').get(project_id)?.root_path);
+  if (!root) throw new Error('root_path required or register project first');
+  registerProject(db, { id: project_id, name: project_id, root_path: root });
+  const outDir = bmad_output_path || path.join(root, '_bmad-output');
   let importedStories = 0;
   let importedEpics = 0;
   let importedPlanning = 0;
+  let importedLogs = 0;
   const warnings = [];
-  // Minimal: if we find planning-artifacts/epics.md, create epics placeholders
-  const epicsMd = path.join(outDir, 'planning-artifacts', 'epics.md');
-  if (fs.existsSync(epicsMd)) {
-    const txt = fs.readFileSync(epicsMd, 'utf8');
-    const lines = txt.split(/\r?\n/);
-    for (const ln of lines) {
+
+  function readIfExists(p) { try { return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null; } catch { return null; } }
+  function pickFirst(paths) { for (const p of paths) { if (fs.existsSync(p)) return p; } return null; }
+
+  // Epics from epics.md (classic export)
+  const epicCandidates = [
+    path.join(outDir, 'planning', 'epics.md'),
+    path.join(outDir, 'planning-artifacts', 'epics.md'),
+  ];
+  const epicsMd = pickFirst(epicCandidates);
+  if (epicsMd) {
+    const txt = readIfExists(epicsMd) || '';
+    for (const ln of (txt.split(/\r?\n/))) {
       const m = ln.match(/^\s*[-*]\s*Epic\s+(\d+)\s*[:\-]\s*(.+)$/i);
       if (m) {
         const num = parseInt(m[1], 10); const title = m[2].trim();
@@ -356,34 +366,106 @@ function importProject(db, input) {
       }
     }
   }
-  // Import story markdowns from implementation-artifacts/*.md (very tolerant)
-  const implDir = path.join(outDir, 'implementation-artifacts');
-  if (fs.existsSync(implDir)) {
-    for (const f of fs.readdirSync(implDir)) {
+
+  // Stories from exports: _bmad-output/stories/*.md and implementation-artifacts/*.md
+  function importStoriesFromDir(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const f of fs.readdirSync(dir)) {
       if (!f.endsWith('.md')) continue;
-      const content = fs.readFileSync(path.join(implDir, f), 'utf8');
-      const keyMatch = content.match(/^#\s*(\d+-\d+)\b.*$/m);
-      const titleMatch = content.match(/^#\s*\d+-\d+\s*[—-]\s*(.+)$/m);
-      const key = keyMatch ? keyMatch[1] : path.basename(f, '.md');
-      const title = titleMatch ? titleMatch[1].trim() : key;
+      const content = readIfExists(path.join(dir, f)) || '';
+      let key = null, title = null;
+      const h1 = content.match(/^#\s*(.+)$/m);
+      if (h1) {
+        // Patterns: "KEY — Title" or "KEY - Title" or just Title
+        const m = h1[1].match(/^(\d+-\d+)\s*[—-]\s*(.+)$/);
+        if (m) { key = m[1].trim(); title = m[2].trim(); }
+        else if (/^\d+-\d+\b/.test(h1[1])) { key = h1[1].trim(); title = h1[1].trim(); }
+        else { title = h1[1].trim(); }
+      }
+      key = key || path.basename(f, '.md');
+      title = title || key;
       const storyId = `${project_id}:${key}`;
-      db.prepare(`INSERT OR IGNORE INTO stories (id, project_id, key, title, status)
-                  VALUES (?,?,?,?, 'draft')`).run(storyId, project_id, key, title);
+      db.prepare(`INSERT OR IGNORE INTO stories (id, project_id, key, title, status) VALUES (?,?,?,?, 'draft')`).run(storyId, project_id, key, title);
       importedStories++;
-    }
-  }
-  // Planning docs
-  const planningDir = path.join(outDir, 'planning-artifacts');
-  if (fs.existsSync(planningDir)) {
-    for (const t of ['prd', 'architecture']) {
-      const p = path.join(planningDir, `${t}.md`);
-      if (fs.existsSync(p)) {
-        updatePlanningDoc(db, { project_id, type: t, content: fs.readFileSync(p, 'utf8'), generate_summary: true });
-        importedPlanning++;
+      // Parse acceptance criteria and tasks if present
+      const acSection = content.split(/\n##\s+Acceptance Criteria\s*\n/i)[1];
+      if (acSection) {
+        const acLines = acSection.split(/\n##\s+/)[0].split(/\r?\n/).filter(l => /^-\s*\[.\]/.test(l));
+        if (acLines.length) {
+          const criteria = acLines.map(l => {
+            const met = /\[x\]/i.test(l);
+            const t = l.replace(/^\s*-\s*\[[ x]\]\s*/i, '').trim();
+            return { criterion: t, met };
+          });
+          db.prepare('UPDATE stories SET acceptance_criteria=json(?), updated_at=CURRENT_TIMESTAMP WHERE id=?').run(JSON.stringify(criteria), storyId);
+        }
+      }
+      const tasksSection = content.split(/\n##\s+Tasks\s*\n/i)[1];
+      if (tasksSection) {
+        const block = tasksSection.split(/\n##\s+/)[0];
+        const lines = block.split(/\r?\n/).filter(Boolean);
+        let idx = 1; const ins = db.prepare('INSERT INTO tasks (story_id, idx, description, done) VALUES (?,?,?,?)');
+        for (const l of lines) {
+          const m = l.match(/^\s*-\s*\[([ x])\]\s*(?:\((\d+)\)\s*)?(.+)$/);
+          if (!m) continue;
+          const done = m[1].toLowerCase() === 'x' ? 1 : 0;
+          const desc = (m[3] || m[2] || '').trim();
+          ins.run(storyId, idx++, desc, done);
+        }
       }
     }
   }
-  return { success: true, imported: { epics: importedEpics, stories: importedStories, planning_docs: importedPlanning }, warnings };
+  importStoriesFromDir(path.join(outDir, 'stories'));
+  importStoriesFromDir(path.join(outDir, 'implementation-artifacts'));
+
+  // Planning docs across common locations
+  const planningTypes = ['prd','architecture','ux','product_brief','nfr','test_design','atdd','traceability','ci_plan','tech_spec'];
+  const nameMap = {
+    prd: ['prd.md','PRD.md','ProductRequirements.md'],
+    architecture: ['architecture.md','ARCHITECTURE.md','adr.md'],
+    ux: ['ux.md','UX.md','design.md'],
+    product_brief: ['product_brief.md','product-brief.md','brief.md'],
+    nfr: ['nfr.md','nfr-assess.md','non-functional.md'],
+    test_design: ['test-design.md','test_design.md'],
+    atdd: ['atdd.md','acceptance-test-driven.md'],
+    traceability: ['traceability.md','trace.md'],
+    ci_plan: ['ci-plan.md','ci.md'],
+    tech_spec: ['tech-spec.md','tech_spec.md','spec.md']
+  };
+  for (const t of planningTypes) {
+    const candidates = [
+      path.join(outDir, 'planning', `${t}.md`),
+      path.join(outDir, 'planning-artifacts', `${t}.md`),
+      ...((nameMap[t]||[]).map(n => path.join(root, 'docs', n))),
+      ...((nameMap[t]||[]).map(n => path.join(root, n)))
+    ];
+    const p = pickFirst(candidates);
+    if (p) {
+      const txt = readIfExists(p) || '';
+      updatePlanningDoc(db, { project_id, type: t, content: txt, generate_summary: true });
+      importedPlanning++;
+    }
+  }
+
+  // Logs
+  const logsMd = pickFirst([
+    path.join(outDir, 'logs', 'logs.md'),
+  ]);
+  if (logsMd) {
+    const txt = readIfExists(logsMd) || '';
+    const lines = txt.split(/\r?\n/);
+    for (const ln of lines) {
+      const m = ln.match(/^\s*-\s*([^\[]+)\s*\[([^\]]+)\]\s*(.+)$/);
+      if (m) {
+        const type = m[2].trim();
+        const content = m[3].trim();
+        db.prepare('INSERT INTO logs (project_id, story_id, type, content) VALUES (?,?,?,?)').run(project_id, null, type, content);
+        importedLogs++;
+      }
+    }
+  }
+
+  return { success: true, imported: { epics: importedEpics, stories: importedStories, planning_docs: importedPlanning, logs: importedLogs }, warnings };
 }
 
 // ---------- Review Fix Workflow ----------

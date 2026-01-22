@@ -390,3 +390,13 @@ Roadmap
 - Code: `bmad:bmm:workflow-status` — Fichier: `_bmad/bmm/workflows/workflow-status/workflow.yaml` — Classic: ouvrir YAML — MCP: `bmad.open_workflow`, statut via `bmad.get_project_status`
 
 Note: Le mapping complet est disponible dynamiquement via `bmad.generate_workflow_mapping({ project_id })` (données issues de `module-help.csv`). Les workflows peuvent aussi être parcourus via les ressources MCP (`resources/list` sur `bmad://workflows`, `resources/read`).
+### Importer un projet existant (MCP)
+- Outil: `bmad.import_project({ project_id, root_path })`
+- Ce que l’import tente automatiquement:
+  - Stories: `_bmad-output/stories/*.md`, `_bmad-output/implementation-artifacts/*.md` (H1 "KEY — Title", sections "## Acceptance Criteria", "## Tasks").
+  - Epics: `_bmad-output/planning/epics.md` ou `_bmad-output/planning-artifacts/epics.md` (lignes "- Epic N: Title").
+  - Planning docs: recherche multi-chemins pour `prd|architecture|ux|product_brief|nfr|test_design|atdd|traceability|ci_plan|tech_spec`:
+    - `_bmad-output/planning/<type>.md`, `_bmad-output/planning-artifacts/<type>.md`, `docs/<name>.md`, `<repo-root>/<name>.md`.
+  - Logs: `_bmad-output/logs/logs.md`.
+- Idempotence: l’import crée l’entrée `projects` si manquante et évite les doublons évidents.
+- Après import: consultez `bmad.get_project_status` pour voir `planning_flags` et `counts` mis à jour.
