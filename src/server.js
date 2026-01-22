@@ -6,8 +6,8 @@
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-const { Server } = require('@modelcontextprotocol/sdk/server');
-const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio');
+const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
+const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 
 const { getDb, migrate } = require('./store/db');
 const tools = require('./tools');

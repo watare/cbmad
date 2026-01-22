@@ -181,7 +181,77 @@ function cmdRegisterProject(cfgPath) {
   console.log('✔ Registered project:', out.project_id);
 }
 
-const [,, cmd, arg1] = process.argv;
+function showHelp() {
+  console.log(
+    [
+      'BMAD MCP Server CLI',
+      '',
+      'Usage: bmad-mcp <command> [args]',
+      '',
+      'Commands (prefix abbreviations allowed):',
+      '  init                 Install/refresh MCP server config',
+      '  doctor               Show environment and config paths',
+      '  project-init         Create bmad.config.yaml in current directory',
+      '  register-project     Register current project from bmad.config.yaml',
+      '  import <path>        Guidance to import legacy BMAD project',
+      '  schema               Write MCP schema to ~/.config/bmad-server/schemas/mcp.schema.json',
+      '  help                 Show this help',
+      '',
+      'Examples:',
+      '  bmad-mcp init',
+      '  bmad-mcp doctor',
+      '  bmad-mcp project-init',
+      '  bmad-mcp register-project',
+      '  bmad-mcp import /path/to/legacy/project',
+      '  bmad-mcp schema',
+      '',
+      'Abbreviations:',
+      '  bmad-mcp d      -> doctor',
+      '  bmad-mcp r      -> register-project',
+      '  bmad-mcp pi     -> project-init',
+      '  bmad-mcp i      -> init',
+      '  bmad-mcp s      -> schema',
+    ].join('\n')
+  );
+}
+
+const aliases = {
+  'h': 'help',
+  'help': 'help',
+  'i': 'init',
+  'd': 'doctor',
+  'pi': 'project-init',
+  'pinit': 'project-init',
+  'r': 'register-project',
+  'reg': 'register-project',
+  'rp': 'register-project',
+  'im': 'import',
+  's': 'schema'
+};
+
+const commands = ['init','doctor','project-init','register-project','import','schema','help'];
+
+function resolveCommand(input) {
+  if (!input) return null;
+  if (aliases[input]) return aliases[input];
+  // prefix match across commands
+  const candidates = commands.filter(c => c.startsWith(input));
+  if (candidates.length === 1) return candidates[0];
+  if (candidates.length > 1) return { ambiguous: candidates };
+  return null;
+}
+
+const [,, rawCmd, arg1] = process.argv;
+const resolved = resolveCommand(rawCmd);
+if (!rawCmd || rawCmd === '-h' || rawCmd === '--help' || resolved === 'help') {
+  showHelp();
+  process.exit(0);
+}
+if (resolved && resolved.ambiguous) {
+  console.error('Ambiguous command:', rawCmd, '\nCandidates:', resolved.ambiguous.join(', '));
+  process.exit(2);
+}
+const cmd = resolved || rawCmd;
 switch (cmd) {
   case 'init':
     installServer();
@@ -202,6 +272,7 @@ switch (cmd) {
     cmdSchema();
     break;
   default:
-    console.log('Usage: bmad-mcp <init|project-init|register-project|import|doctor|schema>');
+    console.error('Unknown command:', rawCmd);
+    showHelp();
     process.exit(2);
 }
