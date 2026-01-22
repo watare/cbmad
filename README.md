@@ -347,6 +347,7 @@ bmad-mcp register-project
 - Readiness: `bmad.start_readiness`, `bmad.update_readiness_item`, `bmad.get_readiness_status`, `bmad.finalize_readiness`
 - Components: `bmad.register_component`, `bmad.list_components`, `bmad.export_component`, `bmad.commit_component`
 - Diagrams: `bmad.create_dataflow`, `bmad.create_diagram`, `bmad.create_flowchart`, `bmad.create_wireframe`
+  - Portfolio: `bmad.generate_wireframes_portfolio({ project_id, format:'md|html|pdf', output_path? })`
 
 ### Schéma MCP (JSON Schema)
 - Découverte via tool: `bmad.get_mcp_schema` (retourne le bundle inputs/outputs de tous les tools)
@@ -409,3 +410,7 @@ Note: Le mapping complet est disponible dynamiquement via `bmad.generate_workflo
   - Unitaire: `bmad.export_planning_doc({ project_id, type: 'prd', format: 'pdf' })`
   - Batch: `bmad.export_docs({ project_id, types: ['prd','architecture','ux'], formats: ['md','pdf'] })`
   - Rendu Formules/Diagrammes: export HTML embarque MathJax et Mermaid; PDF nécessite `puppeteer` installé côté serveur MCP.
+- Générer un portfolio de wireframes (MD/HTML/PDF)
+  - `bmad.generate_wireframes_portfolio({ project_id, format: 'pdf' })`
+  - Inclut automatiquement les images `.png/.jpg/.svg` trouvées à côté des docs wireframes (même basename que `documents.path`).
+  - Le HTML embarque MathJax/Mermaid; le PDF requiert `make install PDF=1`.

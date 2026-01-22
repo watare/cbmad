@@ -1928,3 +1928,111 @@ function exportDocs(db, input, { exportDir }) {
 
 module.exports.exportPlanningDoc = exportPlanningDoc;
 module.exports.exportDocs = exportDocs;
+
+// ---------- Wireframes Portfolio Generator ----------
+function firstHeading(md) {
+  const m = (md || '').match(/^#\s+(.+)$/m);
+  return m ? m[1].trim() : null;
+}
+
+function detectImageForDoc(projectRoot, docPath) {
+  const full = path.join(projectRoot, docPath);
+  const base = full.replace(/\.md$/i, '');
+  const candidates = [base + '.png', base + '.jpg', base + '.jpeg', base + '.svg'];
+  for (const p of candidates) if (fs.existsSync(p)) return p;
+  // Try same dir with same basename but any extension
+  const dir = path.dirname(full);
+  const name = path.basename(base);
+  if (fs.existsSync(dir)) {
+    for (const f of fs.readdirSync(dir)) {
+      const lower = f.toLowerCase();
+      if (lower.startsWith(name.toLowerCase()) && (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.svg'))) {
+        return path.join(dir, f);
+      }
+    }
+  }
+  return null;
+}
+
+function relPath(from, to) {
+  try { return path.relative(path.dirname(from), to); } catch { return to; }
+}
+
+async function generateWireframesPortfolio(db, input, { exportDir }) {
+  const { project_id, format = 'md', output_path, title = 'Wireframes Portfolio', include_tags } = input;
+  const proj = db.prepare('SELECT root_path FROM projects WHERE id=?').get(project_id);
+  if (!proj || !proj.root_path) throw new Error('Project root_path not set');
+  const projectRoot = proj.root_path;
+  // Collect wireframe documents
+  let rows = db.prepare("SELECT path, tags, content, created_at FROM documents WHERE project_id=? AND (type='diagram' OR type='wireframe') ORDER BY created_at ASC").all(project_id);
+  rows = rows.filter(r => {
+    const tags = (r.tags || '').toLowerCase();
+    const hasWireframe = tags.includes('wireframe');
+    if (!hasWireframe) return false;
+    if (include_tags && include_tags.length) {
+      return include_tags.every(t => tags.includes(String(t).toLowerCase()));
+    }
+    return true;
+  });
+  const items = rows.map((r, i) => {
+    const h1 = firstHeading(r.content || '') || `Wireframe ${i + 1}`;
+    const img = detectImageForDoc(projectRoot, r.path);
+    return { title: h1, docPath: r.path, image: img };
+  });
+  // Compose markdown
+  const defaultOutBase = path.join(projectRoot, '_bmad-output', 'portfolio');
+  const outPath = output_path || path.join(defaultOutBase, `wireframes.${format}`);
+  ensureDir(path.dirname(outPath));
+  const mdLines = [];
+  mdLines.push(`# ${title}`);
+  mdLines.push('');
+  mdLines.push(`Generated: ${new Date().toISOString()}`);
+  mdLines.push('');
+  if (!items.length) mdLines.push('_No wireframes found. Use bmad.create_wireframe to add._');
+  else {
+    mdLines.push('## Table of Contents');
+    for (const it of items) mdLines.push(`- [${it.title}](#${it.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$|/g,'')})`);
+    mdLines.push('');
+    for (const it of items) {
+      mdLines.push(`## ${it.title}`);
+      if (it.image) {
+        const rel = relPath(outPath, it.image);
+        mdLines.push('', `![${it.title}](${rel})`, '');
+      } else {
+        mdLines.push('', '_No image found next to wireframe doc; include a .png/.jpg/.svg export with the same basename._', '');
+      }
+    }
+  }
+  const markdown = mdLines.join('\n');
+  if (format === 'md') {
+    fs.writeFileSync(outPath, markdown, 'utf8');
+    return { success: true, path: outPath, count: items.length };
+  }
+  if (format === 'html') {
+    const html = renderMarkdownHtml(title, markdown);
+    fs.writeFileSync(outPath, html, 'utf8');
+    return { success: true, path: outPath, count: items.length };
+  }
+  if (format === 'pdf') {
+    const html = renderMarkdownHtml(title, markdown);
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir?.() || '/tmp', 'bmad-portfolio-'));
+    const tmpHtml = path.join(tmpDir, 'wireframes.html');
+    fs.writeFileSync(tmpHtml, html, 'utf8');
+    try {
+      const puppeteer = require('puppeteer');
+      const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+      const page = await browser.newPage();
+      await page.goto('file://' + tmpHtml, { waitUntil: 'networkidle0' });
+      const waitMs = Number(process.env.BMAD_PDF_RENDER_WAIT_MS || 1200);
+      await page.waitForTimeout(waitMs);
+      await page.pdf({ path: outPath, format: 'A4', printBackground: true });
+      await browser.close();
+      return { success: true, path: outPath, count: items.length };
+    } catch (e) {
+      return { success: false, error: 'pdf-deps-missing', detail: 'Install puppeteer to enable PDF export', suggested_command: 'npm i puppeteer' };
+    }
+  }
+  throw new Error('Unsupported format: ' + format);
+}
+
+module.exports.generateWireframesPortfolio = (db, input, ctx) => generateWireframesPortfolio(db, input, ctx);

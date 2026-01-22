@@ -322,6 +322,8 @@ async function main() {
   mcp.registerTool('bmad.create_wireframe', { description: 'Create a wireframe stub', inputSchema: anyArgs }, withDb((db, input) => tools.createWireframe(db, input)));
   // Sprint planning generation
   mcp.registerTool('bmad.sprint_planning_generate', { description: 'Generate a basic sprint plan from backlog', inputSchema: anyArgs }, withDb((db, input) => tools.sprintPlanningGenerate(db, input)));
+  // Wireframes portfolio export
+  mcp.registerTool('bmad.generate_wireframes_portfolio', { description: 'Generate a wireframes portfolio (md/html/pdf) from diagram docs', inputSchema: anyArgs }, withDb((db, input) => tools.generateWireframesPortfolio(db, input, { exportDir })));
 
   const transport = new StdioServerTransport();
   await mcp.connect(transport);
