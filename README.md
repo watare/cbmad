@@ -16,6 +16,12 @@ Chemins
 - Exports: `~/.config/bmad-server/exports/`
 - Config MCP (Claude): `~/.claude/mcp-servers.json`
 
+Pré-requis / Conditions initiales
+- Dépôt Git déjà initialisé dans chaque projet applicatif où vous utiliserez BMAD (ex. `git init && git add -A && git commit -m "init"`).
+- Node.js >= 18 et npm installés localement.
+- Accès en écriture à `~/.config` et `~/.claude` (créés au besoin).
+- Optionnel: `~/.local/bin` présent dans le `PATH` pour le shim `bmad-mcp`.
+
 Installation (1 commande)
 - Prérequis: Node.js >= 18, `~/.local/bin` dans le PATH (optionnel), accès à `~/.config`
 - Étapes:
@@ -47,7 +53,7 @@ Utilisation côté projet (CLI uniquement)
 
 Créer un nouveau projet (init rapide)
 - Dans le dossier du projet:
-  1) `bmad-mcp project-init` (génère `bmad.config.yaml` + `_bmad-output/`)
+  1) `bmad-mcp project-init` (écrit/écrase `bmad.config.yaml` avec backup `.bak-*` + prépare `_bmad-output/`)
   2) `bmad-mcp register-project` (enregistre le projet dans la DB centrale)
   3) Ouvrir Claude dans ce dossier et lancer vos workflows `/bmad...`
 

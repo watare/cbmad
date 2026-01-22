@@ -124,8 +124,8 @@ function cmdProjectInit(cwd) {
   const cfgPath = path.join(projectRoot, 'bmad.config.yaml');
   const content = `project_id: ${projectId}\nname: ${projectId}\nroot_path: ${projectRoot}\nconfig:\n  user_name: your-name\n  user_skill_level: expert\n  communication_language: fr\n`;
   if (fs.existsSync(cfgPath)) {
-    console.log('bmad.config.yaml existe déjà, aucune modification.');
-    return;
+    const bak = cfgPath + ".bak-" + Date.now();
+    try { fs.copyFileSync(cfgPath, bak); console.log('Backup créé:', bak); } catch {}
   }
   fs.writeFileSync(cfgPath, content);
   // Prepare human-readable exports folder
@@ -133,7 +133,7 @@ function cmdProjectInit(cwd) {
   ensureDir(path.join(outDir, 'stories'));
   ensureDir(path.join(outDir, 'planning'));
   ensureDir(path.join(outDir, 'logs'));
-  console.log('✔ Créé', cfgPath);
+  console.log('✔ Écrit', cfgPath);
   console.log('✔ Préparé', outDir);
   console.log('Astuce: en session, appelez bmad.register_project pour enregistrer ce projet.');
 }
