@@ -244,6 +244,49 @@ function migrate(db) {
     `CREATE INDEX IF NOT EXISTS idx_epic_versions ON epic_versions(project_id, epic_number)` ,
     `CREATE INDEX IF NOT EXISTS idx_epic_changelog ON epic_changelog(project_id, epic_number)` ,
     `CREATE INDEX IF NOT EXISTS idx_review_findings_session ON review_findings(session_id)` ,
+    `CREATE TABLE IF NOT EXISTS research_sessions (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      topic TEXT,
+      status TEXT DEFAULT 'open',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS research_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL REFERENCES research_sessions(id) ON DELETE CASCADE,
+      type TEXT,
+      content TEXT,
+      tags TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS ideas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      score INTEGER,
+      status TEXT DEFAULT 'open',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS ux_reviews (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      version TEXT,
+      reviewer TEXT,
+      status TEXT DEFAULT 'open',
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS readiness_checks (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      story_id TEXT,
+      epic_number INTEGER,
+      checklist JSON,
+      status TEXT DEFAULT 'open',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
     `CREATE INDEX IF NOT EXISTS idx_bugs_project ON bugs(project_id)`
   ];
   db.transaction(() => { stmts.forEach(sql => db.prepare(sql).run()); })();

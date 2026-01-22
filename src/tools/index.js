@@ -1167,3 +1167,144 @@ module.exports.switchDocVersion = switchDocVersion;
 module.exports.storySnapshot = storySnapshot;
 module.exports.getStoryVersions = getStoryVersions;
 module.exports.switchStoryVersion = switchStoryVersion;
+
+// ---------- Discovery / Research / Brainstorm ----------
+function startResearchSession(db, input) {
+  const { project_id, topic } = input;
+  const id = `${project_id}:rs-${Date.now()}`;
+  db.prepare("INSERT INTO research_sessions (id, project_id, topic, status) VALUES (?,?,?, 'open')")
+    .run(id, project_id, topic || null);
+  return { success: true, session_id: id };
+}
+
+function addResearchNote(db, input) {
+  const { session_id, type, content, tags } = input;
+  db.prepare('INSERT INTO research_notes (session_id, type, content, tags) VALUES (?,?,?,?)')
+    .run(session_id, type || null, content, (tags || []).join(','));
+  return { success: true };
+}
+
+function listResearchNotes(db, input) {
+  const { session_id, project_id } = input;
+  if (session_id) {
+    const rows = db.prepare('SELECT id, type, content, tags, created_at FROM research_notes WHERE session_id=? ORDER BY id ASC').all(session_id);
+    return { notes: rows };
+  }
+  // aggregate over sessions by project
+  const rows = db.prepare(`SELECT rn.id, rs.id AS session_id, rn.type, rn.content, rn.tags, rn.created_at
+                           FROM research_notes rn JOIN research_sessions rs ON rs.id=rn.session_id
+                           WHERE rs.project_id=? ORDER BY rn.id ASC`).all(project_id);
+  return { notes: rows };
+}
+
+function addIdea(db, input) {
+  const { project_id, title, description, score, status } = input;
+  db.prepare('INSERT INTO ideas (project_id, title, description, score, status) VALUES (?,?,?,?,?)')
+    .run(project_id, title, description || null, score || null, status || 'open');
+  return { success: true };
+}
+
+function listIdeas(db, input) {
+  const { project_id, status } = input;
+  let sql = 'SELECT id, title, description, score, status FROM ideas WHERE project_id=?';
+  const params = [project_id];
+  if (status) { sql += ' AND status=?'; params.push(status); }
+  sql += ' ORDER BY COALESCE(score,0) DESC, id DESC';
+  const rows = db.prepare(sql).all(...params);
+  return { ideas: rows };
+}
+
+// ---------- UX Validation ----------
+function startUxReview(db, input) {
+  const { project_id, version, reviewer } = input;
+  const id = `${project_id}:uxr-${Date.now()}`;
+  db.prepare("INSERT INTO ux_reviews (id, project_id, version, reviewer, status) VALUES (?,?,?,?,'open')")
+    .run(id, project_id, version || null, reviewer || null);
+  return { success: true, review_id: id };
+}
+
+function approveUxReview(db, input) {
+  const { review_id, notes } = input;
+  db.prepare("UPDATE ux_reviews SET status='approved', notes=? WHERE id=?").run(notes || null, review_id);
+  return { success: true };
+}
+
+function rejectUxReview(db, input) {
+  const { review_id, notes } = input;
+  db.prepare("UPDATE ux_reviews SET status='rejected', notes=? WHERE id=?").run(notes || null, review_id);
+  return { success: true };
+}
+
+function listUxReviews(db, input) {
+  const { project_id, version } = input;
+  let sql = 'SELECT id, version, reviewer, status, notes, created_at FROM ux_reviews WHERE project_id=?';
+  const params = [project_id];
+  if (version) { sql += ' AND version=?'; params.push(version); }
+  sql += ' ORDER BY id DESC';
+  const rows = db.prepare(sql).all(...params);
+  return { reviews: rows };
+}
+
+// ---------- Implementation Readiness ----------
+function defaultReadinessChecklist() {
+  return [
+    { key: 'tests', label: 'Automated tests in place', met: false },
+    { key: 'docs', label: 'Docs updated', met: false },
+    { key: 'security', label: 'Security review passed', met: false },
+    { key: 'performance', label: 'Performance acceptable', met: false },
+    { key: 'risks', label: 'Risks addressed', met: false }
+  ];
+}
+
+function startReadiness(db, input) {
+  const { project_id, story_id, epic_number } = input;
+  const id = `${project_id}:ready-${Date.now()}`;
+  const checklist = defaultReadinessChecklist();
+  db.prepare("INSERT INTO readiness_checks (id, project_id, story_id, epic_number, checklist, status) VALUES (?,?,?,?,?, 'open')")
+    .run(id, project_id, story_id || null, epic_number || null, JSON.stringify(checklist));
+  return { success: true, readiness_id: id, checklist };
+}
+
+function updateReadinessItem(db, input) {
+  const { readiness_id, key, met } = input;
+  const row = db.prepare('SELECT checklist FROM readiness_checks WHERE id=?').get(readiness_id);
+  if (!row) throw new Error('Readiness not found');
+  const list = JSON.parse(row.checklist || '[]');
+  for (const item of list) if (item.key === key) item.met = !!met;
+  db.prepare('UPDATE readiness_checks SET checklist=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+    .run(JSON.stringify(list), readiness_id);
+  return { success: true };
+}
+
+function getReadinessStatus(db, input) {
+  const { readiness_id } = input;
+  const row = db.prepare('SELECT checklist, status FROM readiness_checks WHERE id=?').get(readiness_id);
+  if (!row) throw new Error('Readiness not found');
+  const list = JSON.parse(row.checklist || '[]');
+  const total = list.length;
+  const met = list.filter(i => i.met).length;
+  const all_met = met === total && total > 0;
+  return { status: row.status, progress: { met, total }, all_met, checklist: list };
+}
+
+function finalizeReadiness(db, input) {
+  const { readiness_id } = input;
+  const st = getReadinessStatus(db, { readiness_id });
+  const status = st.all_met ? 'passed' : 'failed';
+  db.prepare('UPDATE readiness_checks SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(status, readiness_id);
+  return { success: true, status };
+}
+
+module.exports.startResearchSession = startResearchSession;
+module.exports.addResearchNote = addResearchNote;
+module.exports.listResearchNotes = listResearchNotes;
+module.exports.addIdea = addIdea;
+module.exports.listIdeas = listIdeas;
+module.exports.startUxReview = startUxReview;
+module.exports.approveUxReview = approveUxReview;
+module.exports.rejectUxReview = rejectUxReview;
+module.exports.listUxReviews = listUxReviews;
+module.exports.startReadiness = startReadiness;
+module.exports.updateReadinessItem = updateReadinessItem;
+module.exports.getReadinessStatus = getReadinessStatus;
+module.exports.finalizeReadiness = finalizeReadiness;

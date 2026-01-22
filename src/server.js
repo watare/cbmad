@@ -179,6 +179,22 @@ async function main() {
   mcp.registerTool('bmad.story_snapshot', { description: 'Snapshot a story (with tasks)', inputSchema: anyArgs }, withDb((db, input) => tools.storySnapshot(db, input)));
   mcp.registerTool('bmad.get_story_versions', { description: 'List story snapshots', inputSchema: anyArgs }, withDb((db, input) => tools.getStoryVersions(db, input)));
   mcp.registerTool('bmad.switch_story_version', { description: 'Switch story to a snapshot', inputSchema: anyArgs }, withDb((db, input) => tools.switchStoryVersion(db, input)));
+  // Discovery / Brainstorm / Ideas
+  mcp.registerTool('bmad.start_research_session', { description: 'Start a research/brainstorm session', inputSchema: anyArgs }, withDb((db, input) => tools.startResearchSession(db, input)));
+  mcp.registerTool('bmad.add_research_note', { description: 'Add a research note', inputSchema: anyArgs }, withDb((db, input) => tools.addResearchNote(db, input)));
+  mcp.registerTool('bmad.list_research_notes', { description: 'List research notes', inputSchema: anyArgs }, withDb((db, input) => tools.listResearchNotes(db, input)));
+  mcp.registerTool('bmad.add_idea', { description: 'Add an idea to backlog', inputSchema: anyArgs }, withDb((db, input) => tools.addIdea(db, input)));
+  mcp.registerTool('bmad.list_ideas', { description: 'List ideas backlog', inputSchema: anyArgs }, withDb((db, input) => tools.listIdeas(db, input)));
+  // UX Validation
+  mcp.registerTool('bmad.start_ux_review', { description: 'Start a UX review session', inputSchema: anyArgs }, withDb((db, input) => tools.startUxReview(db, input)));
+  mcp.registerTool('bmad.approve_ux_review', { description: 'Approve UX review', inputSchema: anyArgs }, withDb((db, input) => tools.approveUxReview(db, input)));
+  mcp.registerTool('bmad.reject_ux_review', { description: 'Reject UX review', inputSchema: anyArgs }, withDb((db, input) => tools.rejectUxReview(db, input)));
+  mcp.registerTool('bmad.list_ux_reviews', { description: 'List UX reviews', inputSchema: anyArgs }, withDb((db, input) => tools.listUxReviews(db, input)));
+  // Implementation readiness
+  mcp.registerTool('bmad.start_readiness', { description: 'Start implementation readiness check', inputSchema: anyArgs }, withDb((db, input) => tools.startReadiness(db, input)));
+  mcp.registerTool('bmad.update_readiness_item', { description: 'Update a readiness checklist item', inputSchema: anyArgs }, withDb((db, input) => tools.updateReadinessItem(db, input)));
+  mcp.registerTool('bmad.get_readiness_status', { description: 'Get readiness status', inputSchema: anyArgs }, withDb((db, input) => tools.getReadinessStatus(db, input)));
+  mcp.registerTool('bmad.finalize_readiness', { description: 'Finalize readiness and set status', inputSchema: anyArgs }, withDb((db, input) => tools.finalizeReadiness(db, input)));
   // Review fix
   mcp.registerTool('bmad.get_review_backlog', { description: 'List pending review follow-up items', inputSchema: anyArgs }, withDb((db, input) => tools.getReviewBacklog(db, input)));
   mcp.registerTool('bmad.complete_review_item', { description: 'Complete a review follow-up item', inputSchema: anyArgs }, withDb((db, input) => tools.completeReviewItem(db, input)));
