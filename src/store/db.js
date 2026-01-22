@@ -127,6 +127,15 @@ function migrate(db) {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(project_id, path)
     )`,
+    `CREATE TABLE IF NOT EXISTS phase_gates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      gate_key TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      notes TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(project_id, gate_key)
+    )`,
     `CREATE TABLE IF NOT EXISTS story_labels (
       story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
       label TEXT NOT NULL,

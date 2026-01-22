@@ -90,6 +90,10 @@ async function main() {
   mcp.registerTool('bmad.open_workflow', { description: 'Open a workflow by code', inputSchema: anyArgs }, withDb((db, input) => tools.openWorkflow(db, input)));
   mcp.registerTool('bmad.next_step', { description: 'Get next workflow step by index (simple splitter)', inputSchema: anyArgs }, withDb((db, input) => tools.nextStep(db, input)));
   mcp.registerTool('bmad.generate_workflow_mapping', { description: 'Generate quick reference mapping from module-help.csv', inputSchema: anyArgs }, withDb((db, input) => tools.generateWorkflowMapping(db, input)));
+  // Phase Gates (question discipline)
+  mcp.registerTool('bmad.list_phase_gates', { description: 'List phase/question gates for a project', inputSchema: anyArgs }, withDb((db, input) => tools.listPhaseGates(db, input)));
+  mcp.registerTool('bmad.set_phase_gate', { description: 'Set a phase gate status (open/answered/waived)', inputSchema: anyArgs }, withDb((db, input) => tools.setPhaseGate(db, input)));
+  mcp.registerTool('bmad.recommend_phase_gates', { description: 'Get recommended phase gates', inputSchema: anyArgs }, withDb((db, input) => tools.recommendPhaseGates(db, input)));
 
   // MCP Resources: expose installed workflows for browsing
   try {

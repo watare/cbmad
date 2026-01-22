@@ -1560,6 +1560,8 @@ function getProjectStatus(db, input) {
   const trace = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='traceability'").get(project_id);
   const ciPlan = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='ci_plan'").get(project_id);
   const techSpec = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='tech_spec'").get(project_id);
+  const gates = db.prepare('SELECT status, COUNT(*) AS n FROM phase_gates WHERE project_id=? GROUP BY status').all(project_id);
+  const gates_by_status = Object.fromEntries(gates.map(r => [r.status, r.n]));
   return {
     found: true,
     project: { id: proj.id, name: proj.name, root_path: proj.root_path, config: cfg },
@@ -1569,7 +1571,8 @@ function getProjectStatus(db, input) {
       stories_by_status: byStatus
     },
     discovery: { recent_sessions: sessions },
-    planning_flags: { has_prd: !!prd, has_architecture: !!arch, has_ux: !!ux, has_product_brief: !!brief, has_nfr: !!nfr, has_test_design: !!testDesign, has_atdd: !!atdd, has_traceability: !!trace, has_ci_plan: !!ciPlan, has_tech_spec: !!techSpec }
+    planning_flags: { has_prd: !!prd, has_architecture: !!arch, has_ux: !!ux, has_product_brief: !!brief, has_nfr: !!nfr, has_test_design: !!testDesign, has_atdd: !!atdd, has_traceability: !!trace, has_ci_plan: !!ciPlan, has_tech_spec: !!techSpec },
+    phase_gates: { by_status: gates_by_status }
   };
 }
 
@@ -2036,3 +2039,45 @@ async function generateWireframesPortfolio(db, input, { exportDir }) {
 }
 
 module.exports.generateWireframesPortfolio = (db, input, ctx) => generateWireframesPortfolio(db, input, ctx);
+
+// ---------- Phase Gates (Question Discipline) ----------
+const DEFAULT_GATES = [
+  { key: 'discovery_questions', label: 'Discovery clarifying questions answered' },
+  { key: 'prd_clarifications', label: 'PRD clarifications addressed' },
+  { key: 'ux_clarifications', label: 'UX clarifications addressed' },
+  { key: 'nfr_questions', label: 'Non-functional requirements clarified' },
+  { key: 'test_design_questions', label: 'Test design clarifications gathered' }
+];
+
+function ensureDefaultGates(db, project_id) {
+  const cnt = db.prepare('SELECT COUNT(*) AS n FROM phase_gates WHERE project_id=?').get(project_id).n;
+  if (cnt > 0) return;
+  const ins = db.prepare('INSERT OR IGNORE INTO phase_gates (project_id, gate_key, status, notes) VALUES (?,?,?,NULL)');
+  for (const g of DEFAULT_GATES) ins.run(project_id, g.key, 'open');
+}
+
+function listPhaseGates(db, input) {
+  const { project_id } = input;
+  ensureDefaultGates(db, project_id);
+  const rows = db.prepare('SELECT gate_key, status, COALESCE(notes, "") AS notes, updated_at FROM phase_gates WHERE project_id=? ORDER BY gate_key ASC').all(project_id);
+  return { gates: rows };
+}
+
+function setPhaseGate(db, input) {
+  const { project_id, gate_key, status, notes } = input;
+  if (!project_id || !gate_key || !status) throw new Error('project_id, gate_key, status required');
+  db.prepare(`INSERT INTO phase_gates (project_id, gate_key, status, notes)
+              VALUES (?,?,?,?)
+              ON CONFLICT(project_id, gate_key) DO UPDATE SET status=excluded.status, notes=COALESCE(excluded.notes, phase_gates.notes), updated_at=CURRENT_TIMESTAMP`)
+    .run(project_id, gate_key, status, notes || null);
+  return { success: true };
+}
+
+function recommendPhaseGates(db, input) {
+  // Static recommendations for now; could be phase-aware later
+  return { recommended: DEFAULT_GATES };
+}
+
+module.exports.listPhaseGates = listPhaseGates;
+module.exports.setPhaseGate = setPhaseGate;
+module.exports.recommendPhaseGates = recommendPhaseGates;

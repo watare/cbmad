@@ -193,6 +193,7 @@ Les deux approches respectent la séquence BMAD: Discovery → Planning → Solu
   - Statut composite: `bmad.get_project_status` (auto‑register au besoin) donne contexte+sprint+discovery+flags planning.
   - Initialisation orchestrée: `bmad.workflow_init` (register → sprint → docs → seed PRD/Arch/UX) puis renvoie le statut.
   - Proposer les étapes optionnelles: `bmad.list_optional_workflows` pour la phase en cours; conserver leurs livrables via `bmad.save_workflow_output` (stocké en DB + exportable).
+  - Portes de questions (gates): utilisez `bmad.list_phase_gates`/`bmad.set_phase_gate` pour consigner les clarifications (ex: `ux_clarifications`). Interdisez-vous de concevoir l’UX à partir du seul PRD sans consigner au moins 5 questions pertinentes ou `waived` raisonné.
 
 ## Gains en Tokens (ordre de grandeur)
 - Classique (observé):
@@ -327,6 +328,7 @@ bmad-mcp register-project
 - Project: `bmad.register_project`, `bmad.get_project_context`, `bmad.get_project_status`, `bmad.workflow_init`
 - Runner BMAD: `bmad.install_bmad_method`, `bmad.list_workflows`, `bmad.open_workflow`, `bmad.next_step`, `bmad.generate_workflow_mapping`
   - Optionnels: `bmad.list_optional_workflows`, `bmad.save_workflow_output`
+  - Gates: `bmad.list_phase_gates`, `bmad.set_phase_gate`, `bmad.recommend_phase_gates`
   - Optional docs versioning: `bmad.product_brief_new`, `bmad.get_product_brief_versions`, `bmad.switch_product_brief_version`, `bmad.nfr_new`, `bmad.get_nfr_versions`, `bmad.switch_nfr_version`, `bmad.test_design_new`, `bmad.get_test_design_versions`, `bmad.switch_test_design_version`, `bmad.atdd_new`, `bmad.get_atdd_versions`, `bmad.switch_atdd_version`, `bmad.trace_new`, `bmad.get_trace_versions`, `bmad.switch_trace_version`, `bmad.ci_plan_new`, `bmad.get_ci_plan_versions`, `bmad.switch_ci_plan_version`, `bmad.tech_spec_new`, `bmad.get_tech_spec_versions`, `bmad.switch_tech_spec_version`.
 - Story: `bmad.get_next_story`, `bmad.get_story_context`, `bmad.get_story_summary`, `bmad.create_story`, `bmad.update_story_status`, `bmad.update_story`, `bmad.delete_story`, `bmad.story_snapshot`, `bmad.get_story_versions`, `bmad.switch_story_version`
 - Tasks: `bmad.complete_task`, `bmad.add_review_tasks`

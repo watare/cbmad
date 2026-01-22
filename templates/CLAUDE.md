@@ -26,6 +26,11 @@ Canonical BMAD phases, startup routine, workflow runner usage, and exact tool ma
 - PRD: `bmad.prd_new({ project_id, version, content })` and/or `bmad.update_planning_doc({ type: 'prd' })`.
 - Architecture: `bmad.arch_new` / `bmad.get_arch_versions` / `bmad.switch_arch_version`.
 - UX: `bmad.ux_new` + `bmad.start_ux_review` → `bmad.approve_ux_review`/`bmad.reject_ux_review`.
+- Question Gate (before UX or Design):
+  - Ensure clarifying questions are asked and answered:
+    - Create a session: `bmad.start_research_session({ project_id, topic: 'Clarifying Questions' })`
+    - Add questions as notes: `bmad.add_research_note({ session_id, type: 'question', content })`
+    - When done: `bmad.set_phase_gate({ project_id, gate_key: 'ux_clarifications', status: 'answered', notes: 'summary' })` (or `waived` with rationale)
 - Other optionals (persist via update_planning_doc; version via *_new/get_*_versions/switch_*_version):
   - NFR: `nfr`
   - Test Design: `test_design`
@@ -59,3 +64,8 @@ Canonical BMAD phases, startup routine, workflow runner usage, and exact tool ma
 - Prefer summaries (`bmad.get_planning_doc({ format:'summary' })`, `bmad.get_document({ format:'summary' })`) before fetching full content.
 - Persist via MCP set calls; do not write repo Markdown unless explicitly exporting.
 - In multi‑agent contexts, reserve tasks (`bmad.reserve_task`) and use `precondition_updated_at` on planning updates.
+- Question Gate (before readiness):
+  - Verify non-functional and test design clarifications captured:
+    - `bmad.set_phase_gate({ project_id, gate_key: 'nfr_questions', status: 'answered'|'waived', notes? })`
+    - `bmad.set_phase_gate({ project_id, gate_key: 'test_design_questions', status: 'answered'|'waived', notes? })`
+- Do not design UX solely from PRD without a questions gate; record at least 5 clarifying questions or explicitly waive with rationale via `bmad.set_phase_gate`.
