@@ -585,3 +585,217 @@ module.exports.listStories = listStories;
 module.exports.listEpics = listEpics;
 module.exports.updateEpic = updateEpic;
 module.exports.searchStories = searchStories;
+
+// ---------- Story Admin ----------
+function updateStory(db, input) {
+  const { story_id, title, description, epic_number, status } = input;
+  const s = db.prepare('SELECT project_id FROM stories WHERE id=?').get(story_id);
+  if (!s) throw new Error('Story not found');
+  let epicId = null;
+  if (epic_number != null) {
+    const e = db.prepare('SELECT id FROM epics WHERE project_id=? AND number=?').get(s.project_id, epic_number);
+    if (!e) throw new Error('Epic not found');
+    epicId = e.id;
+  }
+  const fields = [];
+  const vals = [];
+  if (title != null) { fields.push('title=?'); vals.push(title); }
+  if (description != null) { fields.push('description=?'); vals.push(description); }
+  if (epicId != null) { fields.push('epic_id=?'); vals.push(epicId); }
+  if (status != null) { fields.push('status=?'); vals.push(status); }
+  if (!fields.length) return { success: true };
+  vals.push(story_id);
+  db.prepare(`UPDATE stories SET ${fields.join(', ')}, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...vals);
+  return { success: true };
+}
+
+function deleteStory(db, input) {
+  const { story_id, force = false } = input;
+  const cnt = db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE story_id=? AND done=0').get(story_id).n;
+  if (cnt > 0 && !force) {
+    return { success: false, error: 'incomplete-tasks' };
+  }
+  db.prepare('DELETE FROM stories WHERE id=?').run(story_id);
+  return { success: true };
+}
+
+// ---------- Epic Admin ----------
+function getEpic(db, input) {
+  const { project_id, number } = input;
+  const row = db.prepare('SELECT id, number, title, description, status FROM epics WHERE project_id=? AND number=?').get(project_id, number);
+  if (!row) return { found: false };
+  return { found: true, epic: row };
+}
+
+function deleteEpic(db, input) {
+  const { project_id, number, force = false } = input;
+  const epic = db.prepare('SELECT id FROM epics WHERE project_id=? AND number=?').get(project_id, number);
+  if (!epic) return { success: true };
+  const stories = db.prepare('SELECT COUNT(*) AS n FROM stories WHERE epic_id=?').get(epic.id).n;
+  if (stories > 0 && !force) return { success: false, error: 'stories-exist' };
+  if (stories > 0 && force) db.prepare('UPDATE stories SET epic_id=NULL WHERE epic_id=?').run(epic.id);
+  db.prepare('DELETE FROM epics WHERE id=?').run(epic.id);
+  return { success: true };
+}
+
+// ---------- Labels ----------
+function setStoryLabels(db, input) {
+  const { story_id, labels } = input;
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM story_labels WHERE story_id=?').run(story_id);
+    const ins = db.prepare('INSERT INTO story_labels (story_id, label) VALUES (?,?)');
+    for (const l of (labels || [])) ins.run(story_id, l);
+  });
+  tx();
+  return { success: true };
+}
+
+function listStoryLabels(db, input) {
+  const { story_id } = input;
+  const rows = db.prepare('SELECT label FROM story_labels WHERE story_id=? ORDER BY label ASC').all(story_id);
+  return { labels: rows.map(r => r.label) };
+}
+
+function searchByLabel(db, input) {
+  const { project_id, label } = input;
+  const rows = db.prepare('SELECT s.key, s.title, s.status FROM stories s JOIN story_labels l ON l.story_id=s.id WHERE s.project_id=? AND l.label=? ORDER BY s.updated_at DESC').all(project_id, label);
+  return { stories: rows };
+}
+
+// ---------- Split/Merge ----------
+function splitStory(db, input) {
+  const { story_id, new_key, title, move_task_indices = [] } = input;
+  const s = db.prepare('SELECT project_id, epic_id FROM stories WHERE id=?').get(story_id);
+  if (!s) throw new Error('Story not found');
+  const newId = `${s.project_id}:${new_key}`;
+  db.prepare('INSERT INTO stories (id, project_id, epic_id, key, title, status) VALUES (?,?,?,?,?,?)')
+    .run(newId, s.project_id, s.epic_id, new_key, title || new_key, 'draft');
+  const move = db.prepare('UPDATE tasks SET story_id=? WHERE story_id=? AND parent_task_id IS NULL AND idx=?');
+  let moved = 0;
+  for (const idx of move_task_indices) { const r = move.run(newId, story_id, idx); moved += r.changes ? 1 : 0; }
+  return { success: true, new_story_id: newId, moved };
+}
+
+function mergeStories(db, input) {
+  const { target_story_id, source_story_id, delete_source = true } = input;
+  const baseIdx = db.prepare('SELECT COALESCE(MAX(idx),0) AS m FROM tasks WHERE story_id=? AND parent_task_id IS NULL').get(target_story_id).m;
+  let i = baseIdx + 1;
+  const rows = db.prepare('SELECT idx, description, done FROM tasks WHERE story_id=? AND parent_task_id IS NULL ORDER BY idx ASC').all(source_story_id);
+  const ins = db.prepare('INSERT INTO tasks (story_id, idx, description, done) VALUES (?,?,?,?)');
+  for (const r of rows) ins.run(target_story_id, i++, r.description, r.done ? 1 : 0);
+  if (delete_source) db.prepare('DELETE FROM stories WHERE id=?').run(source_story_id);
+  return { success: true };
+}
+
+// ---------- Story Sprint Assignment ----------
+function setStorySprint(db, input) {
+  const { story_id, sprint_label } = input;
+  db.prepare(`INSERT INTO story_sprints (story_id, sprint_label, updated_at)
+              VALUES (?,?,CURRENT_TIMESTAMP)
+              ON CONFLICT(story_id) DO UPDATE SET sprint_label=excluded.sprint_label, updated_at=CURRENT_TIMESTAMP`).run(story_id, sprint_label);
+  return { success: true };
+}
+
+function listStoriesBySprint(db, input) {
+  const { project_id, sprint_label } = input;
+  const rows = db.prepare(`SELECT s.key, s.title, s.status
+                           FROM stories s JOIN story_sprints ss ON ss.story_id=s.id
+                           WHERE s.project_id=? AND ss.sprint_label=?
+                           ORDER BY s.key ASC`).all(project_id, sprint_label);
+  return { stories: rows };
+}
+
+// ---------- Document Discovery ----------
+function summarize(text, max = 800) {
+  if (!text) return '';
+  const t = text.replace(/\s+/g, ' ').trim();
+  return t.slice(0, max) + (t.length > max ? '...' : '');
+}
+
+function detectDocType(filePath) {
+  const p = filePath.toLowerCase();
+  if (p.endsWith('readme.md')) return 'readme';
+  if (p.includes('/adr') || p.includes('/decisions')) return 'adr';
+  if (p.includes('/docs/')) return 'doc';
+  if (p.includes('.github/workflows/') || p.endsWith('.yml') || p.endsWith('.yaml')) return 'ci';
+  return 'doc';
+}
+
+function walkFiles(root, includeExt = ['.md', '.markdown', '.yml', '.yaml']) {
+  const out = [];
+  const stack = [root];
+  while (stack.length) {
+    const d = stack.pop();
+    const ents = fs.readdirSync(d, { withFileTypes: true });
+    for (const e of ents) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) {
+        if (e.name === 'node_modules' || e.name.startsWith('.git')) continue;
+        stack.push(p);
+      } else {
+        const ext = path.extname(e.name).toLowerCase();
+        if (includeExt.includes(ext)) out.push(p);
+      }
+    }
+  }
+  return out;
+}
+
+function scanDocuments(db, input) {
+  const { project_id, root_path, patterns } = input;
+  const root = root_path || (db.prepare('SELECT root_path FROM projects WHERE id=?').get(project_id)?.root_path);
+  if (!root) throw new Error('root_path not found');
+  const files = walkFiles(root);
+  let count = 0;
+  const upsert = db.prepare(`INSERT INTO documents (project_id, path, type, tags, content, summary)
+                             VALUES (?,?,?,?,?,?)
+                             ON CONFLICT(project_id, path) DO UPDATE SET type=excluded.type, tags=excluded.tags, content=excluded.content, summary=excluded.summary, updated_at=CURRENT_TIMESTAMP`);
+  for (const f of files) {
+    const rel = path.relative(root, f);
+    const txt = fs.readFileSync(f, 'utf8');
+    const type = detectDocType(rel);
+    const tags = type === 'ci' ? 'devops,ci' : (type === 'adr' ? 'adr' : 'docs');
+    upsert.run(project_id, rel, type, tags, txt, summarize(txt));
+    count++;
+  }
+  return { success: true, scanned: count };
+}
+
+function listDocuments(db, input) {
+  const { project_id, type, limit = 100, offset = 0 } = input;
+  let sql = 'SELECT id, path, type, tags, summary, updated_at FROM documents WHERE project_id=?';
+  const params = [project_id];
+  if (type) { sql += ' AND type=?'; params.push(type); }
+  sql += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?'; params.push(limit, offset);
+  return { documents: db.prepare(sql).all(...params) };
+}
+
+function getDocument(db, input) {
+  const { document_id, format = 'summary' } = input;
+  const row = db.prepare('SELECT id, path, type, tags, content, summary, updated_at FROM documents WHERE id=?').get(document_id);
+  if (!row) throw new Error('Document not found');
+  return { id: row.id, path: row.path, type: row.type, tags: row.tags, content: format === 'full' ? row.content : row.summary, updated_at: row.updated_at };
+}
+
+function searchDocuments(db, input) {
+  const { project_id, query, limit = 50 } = input;
+  const q = `%${query}%`;
+  const rows = db.prepare('SELECT id, path, type, tags, summary FROM documents WHERE project_id=? AND (path LIKE ? OR summary LIKE ? OR content LIKE ?) ORDER BY updated_at DESC LIMIT ?').all(project_id, q, q, q, limit);
+  return { documents: rows };
+}
+
+module.exports.updateStory = updateStory;
+module.exports.deleteStory = deleteStory;
+module.exports.getEpic = getEpic;
+module.exports.deleteEpic = deleteEpic;
+module.exports.setStoryLabels = setStoryLabels;
+module.exports.listStoryLabels = listStoryLabels;
+module.exports.searchByLabel = searchByLabel;
+module.exports.splitStory = splitStory;
+module.exports.mergeStories = mergeStories;
+module.exports.setStorySprint = setStorySprint;
+module.exports.listStoriesBySprint = listStoriesBySprint;
+module.exports.scanDocuments = scanDocuments;
+module.exports.listDocuments = listDocuments;
+module.exports.getDocument = getDocument;
+module.exports.searchDocuments = searchDocuments;

@@ -115,6 +115,26 @@ async function main() {
   mcp.registerTool('bmad.list_epics', { description: 'List epics for a project', inputSchema: anyArgs }, withDb((db, input) => tools.listEpics(db, input)));
   mcp.registerTool('bmad.update_epic', { description: 'Create or update an epic', inputSchema: anyArgs }, withDb((db, input) => tools.updateEpic(db, input)));
   mcp.registerTool('bmad.search_stories', { description: 'Search stories by title/description', inputSchema: anyArgs }, withDb((db, input) => tools.searchStories(db, input)));
+  // Admin/story management
+  mcp.registerTool('bmad.update_story', { description: 'Update story fields', inputSchema: anyArgs }, withDb((db, input) => tools.updateStory(db, input)));
+  mcp.registerTool('bmad.delete_story', { description: 'Delete a story (guarded)', inputSchema: anyArgs }, withDb((db, input) => tools.deleteStory(db, input)));
+  mcp.registerTool('bmad.get_epic', { description: 'Get a single epic', inputSchema: anyArgs }, withDb((db, input) => tools.getEpic(db, input)));
+  mcp.registerTool('bmad.delete_epic', { description: 'Delete an epic (guarded)', inputSchema: anyArgs }, withDb((db, input) => tools.deleteEpic(db, input)));
+  // Labels
+  mcp.registerTool('bmad.set_story_labels', { description: 'Set labels for a story', inputSchema: anyArgs }, withDb((db, input) => tools.setStoryLabels(db, input)));
+  mcp.registerTool('bmad.list_story_labels', { description: 'List labels for a story', inputSchema: anyArgs }, withDb((db, input) => tools.listStoryLabels(db, input)));
+  mcp.registerTool('bmad.search_by_label', { description: 'Search stories by label', inputSchema: anyArgs }, withDb((db, input) => tools.searchByLabel(db, input)));
+  // Split/Merge
+  mcp.registerTool('bmad.split_story', { description: 'Split a story by moving tasks', inputSchema: anyArgs }, withDb((db, input) => tools.splitStory(db, input)));
+  mcp.registerTool('bmad.merge_stories', { description: 'Merge source story into target', inputSchema: anyArgs }, withDb((db, input) => tools.mergeStories(db, input)));
+  // Story sprint assignment
+  mcp.registerTool('bmad.set_story_sprint', { description: 'Assign a story to a sprint label', inputSchema: anyArgs }, withDb((db, input) => tools.setStorySprint(db, input)));
+  mcp.registerTool('bmad.list_stories_by_sprint', { description: 'List stories assigned to a sprint', inputSchema: anyArgs }, withDb((db, input) => tools.listStoriesBySprint(db, input)));
+  // Document discovery
+  mcp.registerTool('bmad.scan_documents', { description: 'Scan project docs and index in DB', inputSchema: anyArgs }, withDb((db, input) => tools.scanDocuments(db, input)));
+  mcp.registerTool('bmad.list_documents', { description: 'List indexed documents', inputSchema: anyArgs }, withDb((db, input) => tools.listDocuments(db, input)));
+  mcp.registerTool('bmad.get_document', { description: 'Get one document (summary/full)', inputSchema: anyArgs }, withDb((db, input) => tools.getDocument(db, input)));
+  mcp.registerTool('bmad.search_documents', { description: 'Search indexed documents', inputSchema: anyArgs }, withDb((db, input) => tools.searchDocuments(db, input)));
   // Review fix
   mcp.registerTool('bmad.get_review_backlog', { description: 'List pending review follow-up items', inputSchema: anyArgs }, withDb((db, input) => tools.getReviewBacklog(db, input)));
   mcp.registerTool('bmad.complete_review_item', { description: 'Complete a review follow-up item', inputSchema: anyArgs }, withDb((db, input) => tools.completeReviewItem(db, input)));

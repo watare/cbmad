@@ -93,6 +93,29 @@ function migrate(db) {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      path TEXT NOT NULL,
+      type TEXT,
+      tags TEXT,
+      content TEXT,
+      summary TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(project_id, path)
+    )`,
+    `CREATE TABLE IF NOT EXISTS story_labels (
+      story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      PRIMARY KEY(story_id, label)
+    )`,
+    `CREATE TABLE IF NOT EXISTS story_sprints (
+      story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      sprint_label TEXT NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(story_id)
+    )`,
     `CREATE TABLE IF NOT EXISTS reservations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id TEXT NOT NULL,
@@ -106,7 +129,8 @@ function migrate(db) {
     `CREATE INDEX IF NOT EXISTS idx_epics_project ON epics(project_id)` ,
     `CREATE INDEX IF NOT EXISTS idx_stories_project ON stories(project_id)` ,
     `CREATE INDEX IF NOT EXISTS idx_tasks_story ON tasks(story_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_res_project ON reservations(project_id)`
+    `CREATE INDEX IF NOT EXISTS idx_res_project ON reservations(project_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_docs_project ON documents(project_id)`
   ];
   db.transaction(() => { stmts.forEach(sql => db.prepare(sql).run()); })();
 }
