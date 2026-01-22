@@ -168,6 +168,7 @@ async function main() {
   // Planning Documents
   mcp.registerTool('bmad.get_planning_doc', { description: 'Fetch planning doc', inputSchema: anyArgs }, withDb((db, input) => tools.getPlanningDoc(db, input)));
   mcp.registerTool('bmad.view_planning_doc_md', { description: 'Readable planning doc (markdown, supports section/chunk)', inputSchema: anyArgs }, withDb((db, input) => tools.viewPlanningDocMd(db, input)));
+  mcp.registerTool('bmad.view_gate_card_md', { description: 'Decision gate card (markdown) with extracted sections and actions', inputSchema: anyArgs }, withDb((db, input) => tools.viewGateCardMd(db, input)));
   mcp.registerTool('bmad.get_planning_doc_chunk', { description: 'Fetch planning doc by chunk (index/size)', inputSchema: anyArgs }, withDb((db, input) => tools.getPlanningDocChunk(db, input)));
   mcp.registerTool('bmad.get_planning_doc_sections', { description: 'List planning doc sections (H2 titles)', inputSchema: anyArgs }, withDb((db, input) => tools.getPlanningDocSections(db, input)));
   mcp.registerTool('bmad.get_planning_doc_section', { description: 'Fetch one planning doc section by index', inputSchema: anyArgs }, withDb((db, input) => tools.getPlanningDocSection(db, input)));

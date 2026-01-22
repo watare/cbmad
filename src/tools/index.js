@@ -1352,15 +1352,23 @@ function addResearchNote(db, input) {
 }
 
 function listResearchNotes(db, input) {
-  const { session_id, project_id } = input;
+  const { session_id, project_id, type } = input || {};
   if (session_id) {
-    const rows = db.prepare('SELECT id, type, content, tags, created_at FROM research_notes WHERE session_id=? ORDER BY id ASC').all(session_id);
+    let sql = 'SELECT id, type, content, tags, created_at FROM research_notes WHERE session_id=?';
+    const params = [session_id];
+    if (type) { sql += ' AND type=?'; params.push(type); }
+    sql += ' ORDER BY id ASC';
+    const rows = db.prepare(sql).all(...params);
     return { notes: rows };
   }
   // aggregate over sessions by project
-  const rows = db.prepare(`SELECT rn.id, rs.id AS session_id, rn.type, rn.content, rn.tags, rn.created_at
-                           FROM research_notes rn JOIN research_sessions rs ON rs.id=rn.session_id
-                           WHERE rs.project_id=? ORDER BY rn.id ASC`).all(project_id);
+  let sql = `SELECT rn.id, rs.id AS session_id, rn.type, rn.content, rn.tags, rn.created_at
+             FROM research_notes rn JOIN research_sessions rs ON rs.id=rn.session_id
+             WHERE rs.project_id=?`;
+  const params = [project_id];
+  if (type) { sql += ' AND rn.type=?'; params.push(type); }
+  sql += ' ORDER BY rn.id ASC';
+  const rows = db.prepare(sql).all(...params);
   return { notes: rows };
 }
 
@@ -2224,3 +2232,48 @@ function viewSprintStatusMd(db, input) {
 }
 
 module.exports.viewSprintStatusMd = viewSprintStatusMd;
+
+// ---------- Decision Gate Card (Markdown) ----------
+function extractSection(md, header) {
+  const src = String(md || '');
+  const h = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`\n##\s+${h}\s*\n`, 'i');
+  const idx = src.search(re);
+  if (idx < 0) return null;
+  const start = idx + src.match(re)[0].length;
+  const rest = src.slice(start);
+  const endIdx = rest.search(/\n##\s+/);
+  const body = endIdx >= 0 ? rest.slice(0, endIdx).trim() : rest.trim();
+  return body;
+}
+
+function viewGateCardMd(db, input) {
+  const { project_id, gate_key, doc_type = 'prd', title } = input;
+  ensureDefaultGates(db, project_id);
+  const doc = db.prepare('SELECT content FROM planning_docs WHERE project_id=? AND type=?').get(project_id, doc_type);
+  const content = doc?.content || '';
+  const stack = extractSection(content, 'Stack technique') || extractSection(content, 'Technical Stack');
+  const ac = extractSection(content, "Critères d'acceptation") || extractSection(content, 'Acceptance Criteria');
+  const g = db.prepare('SELECT status, COALESCE(notes, "") AS notes FROM phase_gates WHERE project_id=? AND gate_key=?').get(project_id, gate_key);
+  const q = listResearchNotes(db, { project_id, type: 'question' }).notes || [];
+  const lines = [];
+  lines.push(`# ${title || 'Decision Gate'} — ${gate_key}`);
+  lines.push('');
+  lines.push(`Gate status: ${g ? g.status : 'open'}`);
+  if (g?.notes) lines.push(`Notes: ${g.notes}`);
+  lines.push('');
+  if (stack) { lines.push('## 💻 Stack technique', '', stack, ''); }
+  if (ac) { lines.push("## ✅ Critères d'acceptation", '', ac, ''); }
+  lines.push('---');
+  lines.push('## Questions (capturées)');
+  if (!q.length) lines.push('_Aucune question pour le moment._');
+  else { for (const n of q) lines.push(`- ${n.content}`); }
+  lines.push('');
+  lines.push('## Que souhaitez-vous faire ?');
+  lines.push('1. Approuver → `bmad.set_phase_gate({ project_id, gate_key: \'' + gate_key + '\', status: \"answered\", notes: \"...\" })`');
+  lines.push('2. Rejeter → Mettez à jour le document via `bmad.update_planning_doc({ type: \'' + doc_type + '\', content: ... })`');
+  lines.push('3. Questions → `bmad.start_research_session({ project_id, topic: \"Clarifying Questions\" })` puis `bmad.add_research_note({ session_id, type: \"question\", content })`');
+  return { __format: 'markdown', markdown: lines.join('\n') };
+}
+
+module.exports.viewGateCardMd = viewGateCardMd;
