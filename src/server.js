@@ -82,6 +82,7 @@ async function main() {
   mcp.registerTool('bmad.list_workflows', { description: 'List BMAD workflows (from module-help.csv)', inputSchema: anyArgs }, withDb((db, input) => tools.listWorkflows(db, input)));
   mcp.registerTool('bmad.open_workflow', { description: 'Open a workflow by code', inputSchema: anyArgs }, withDb((db, input) => tools.openWorkflow(db, input)));
   mcp.registerTool('bmad.next_step', { description: 'Get next workflow step by index (simple splitter)', inputSchema: anyArgs }, withDb((db, input) => tools.nextStep(db, input)));
+  mcp.registerTool('bmad.generate_workflow_mapping', { description: 'Generate quick reference mapping from module-help.csv', inputSchema: anyArgs }, withDb((db, input) => tools.generateWorkflowMapping(db, input)));
 
   // MCP Resources: expose installed workflows for browsing
   try {
@@ -187,6 +188,8 @@ async function main() {
   mcp.registerTool('bmad.scan_documents', { description: 'Scan project docs and index in DB', inputSchema: anyArgs }, withDb((db, input) => tools.scanDocuments(db, input)));
   mcp.registerTool('bmad.list_documents', { description: 'List indexed documents', inputSchema: anyArgs }, withDb((db, input) => tools.listDocuments(db, input)));
   mcp.registerTool('bmad.get_document', { description: 'Get one document (summary/full)', inputSchema: anyArgs }, withDb((db, input) => tools.getDocument(db, input)));
+  // Research sessions
+  mcp.registerTool('bmad.list_research_sessions', { description: 'List research sessions for project', inputSchema: anyArgs }, withDb((db, input) => tools.listResearchSessions(db, input)));
   mcp.registerTool('bmad.search_documents', { description: 'Search indexed documents', inputSchema: anyArgs }, withDb((db, input) => tools.searchDocuments(db, input)));
   // Bugs / Quick Fix
   mcp.registerTool('bmad.create_bug', { description: 'Create a bug ticket', inputSchema: anyArgs }, withDb((db, input) => tools.createBug(db, input)));

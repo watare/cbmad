@@ -1318,6 +1318,17 @@ module.exports.startUxReview = startUxReview;
 module.exports.approveUxReview = approveUxReview;
 module.exports.rejectUxReview = rejectUxReview;
 module.exports.listUxReviews = listUxReviews;
+// Provide missing listResearchSessions implementation
+function listResearchSessions(db, input) {
+  const { project_id, status } = input || {};
+  if (!project_id) throw new Error('project_id required');
+  let sql = 'SELECT id, topic, status, created_at FROM research_sessions WHERE project_id=?';
+  const params = [project_id];
+  if (status) { sql += ' AND status=?'; params.push(status); }
+  sql += ' ORDER BY id DESC';
+  const rows = db.prepare(sql).all(...params);
+  return { sessions: rows };
+}
 module.exports.startReadiness = startReadiness;
 module.exports.updateReadinessItem = updateReadinessItem;
 module.exports.getReadinessStatus = getReadinessStatus;
@@ -1675,3 +1686,39 @@ module.exports.installBmadMethod = installBmadMethod;
 module.exports.listWorkflows = listWorkflows;
 module.exports.openWorkflow = openWorkflow;
 module.exports.nextStep = nextStep;
+
+// ---------- Workflow Mapping (Quick Reference) ----------
+function generateWorkflowMapping(db, input) {
+  const { project_id, target = 'project' } = input;
+  const root = target === 'project'
+    ? (db.prepare('SELECT root_path FROM projects WHERE id=?').get(project_id)?.root_path)
+    : path.join(os.homedir(), '.config', 'bmad-server');
+  if (!root) throw new Error('Project not found');
+  const csvPath = target === 'project'
+    ? path.join(root, '_bmad', 'bmm', 'module-help.csv')
+    : path.join(root, 'bmm', 'module-help.csv');
+  if (!fs.existsSync(csvPath)) return { mappings: [] };
+  const lines = fs.readFileSync(csvPath, 'utf8').split(/\r?\n/).filter(Boolean);
+  lines.shift(); // header
+  const rows = [];
+  for (const ln of lines) {
+    const cols = parseCsv(ln);
+    const [module, phase, name, code, seq, wfFile, command, required, agent] = cols;
+    if (!command) continue;
+    rows.push({
+      command,
+      name,
+      phase,
+      agent,
+      required: String(required||'').toLowerCase()==='true',
+      runner_calls: {
+        list: 'bmad.list_workflows',
+        open: `bmad.open_workflow({ project_id, code: '${command}' })`,
+        next: `bmad.next_step({ project_id, code: '${command}', cursor })`
+      }
+    });
+  }
+  return { mappings: rows };
+}
+
+module.exports.generateWorkflowMapping = generateWorkflowMapping;

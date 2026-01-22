@@ -193,6 +193,7 @@ function showHelp() {
       '  doctor               Show environment and config paths',
       '  project-init         Create bmad.config.yaml in current directory',
       '  register-project     Register current project from bmad.config.yaml',
+      '  bootstrap            One-shot: project-init + register + workflows + CLAUDE.md',
       '  import <path>        Guidance to import legacy BMAD project',
       '  schema               Write MCP schema to ~/.config/bmad-server/schemas/mcp.schema.json',
       '  help                 Show this help',
@@ -258,6 +259,56 @@ switch (cmd) {
     break;
   case 'project-init':
     cmdProjectInit(process.cwd());
+    break;
+  case 'bootstrap':
+    (function(){
+      const projectRoot = process.cwd();
+      // 1) project-init
+      cmdProjectInit(projectRoot);
+      // 2) register-project
+      cmdRegisterProject(path.join(projectRoot, 'bmad.config.yaml'));
+      // 3) install workflows
+      try {
+        const cp = require('child_process');
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir?.() || os.tmpdir(), 'bmad-method-'));
+        cp.execFileSync('git', ['clone', '--depth', '1', '--branch', 'main', 'https://github.com/bmad-code-org/BMAD-METHOD', tmp], { stdio: 'inherit' });
+        const srcBmm = path.join(tmp, 'src', 'bmm');
+        const dstBmm = path.join(projectRoot, '_bmad', 'bmm');
+        ensureDir(dstBmm);
+        (function copyDir(src, dst){
+          ensureDir(dst);
+          for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+            const sp = path.join(src, entry.name);
+            const dp = path.join(dst, entry.name);
+            if (entry.isDirectory()) copyDir(sp, dp); else fs.copyFileSync(sp, dp);
+          }
+        })(path.join(srcBmm, 'workflows'), path.join(dstBmm, 'workflows'));
+        const moduleHelp = path.join(srcBmm, 'module-help.csv');
+        if (fs.existsSync(moduleHelp)) fs.copyFileSync(moduleHelp, path.join(dstBmm, 'module-help.csv'));
+        console.log('✔ Installed BMAD-METHOD workflows into', dstBmm);
+      } catch (e) {
+        console.error('WARN: failed to install BMAD-METHOD workflows:', e.message);
+      }
+      // 4) update CLAUDE.md
+      (function(){
+        const dst = path.join(os.homedir(), '.claude', 'CLAUDE.md');
+        ensureDir(path.dirname(dst));
+        const pkgRoot = path.join(__dirname, '..');
+        const src = path.join(pkgRoot, 'templates', 'CLAUDE.md');
+        if (fs.existsSync(dst)) fs.copyFileSync(dst, dst + '.bak-' + Date.now());
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, dst);
+          const agentsDir = path.join(pkgRoot, 'templates', 'agents');
+          if (fs.existsSync(agentsDir)) {
+            for (const f of fs.readdirSync(agentsDir)) {
+              fs.appendFileSync(dst, '\n\n' + fs.readFileSync(path.join(agentsDir, f), 'utf8'));
+            }
+          }
+          console.log('✔ Updated', dst);
+        }
+      })();
+      console.log('✔ Bootstrap complete');
+    })();
     break;
   case 'import':
     cmdImport(arg1);
