@@ -216,6 +216,76 @@ function getPlanningDoc(db, input) {
   return { type, content: format === 'summary' ? (row.summary || '') : (row.content || ''), last_updated: row.updated_at };
 }
 
+// Chunked and sectioned planning-doc reads for large artifacts
+function chunkText(text, size) {
+  const chunks = [];
+  const paragraphs = String(text || '').split(/\n\n+/);
+  let buf = '';
+  for (const p of paragraphs) {
+    // +2 for the blank line we will add
+    if ((buf.length + p.length + 2) > size && buf.length > 0) {
+      chunks.push(buf.trimEnd());
+      buf = '';
+    }
+    buf += (buf ? '\n\n' : '') + p;
+  }
+  if (buf) chunks.push(buf);
+  if (!chunks.length) chunks.push('');
+  return chunks;
+}
+
+function getPlanningDocChunk(db, input) {
+  const { project_id, type, chunk_index = 0, chunk_size = 3000 } = input;
+  const row = db.prepare('SELECT content, updated_at FROM planning_docs WHERE project_id=? AND type=?').get(project_id, type);
+  if (!row) return { found: false };
+  const chunks = chunkText(row.content || '', Math.max(500, Number(chunk_size) || 3000));
+  const idx = Math.min(Math.max(0, Number(chunk_index) || 0), chunks.length - 1);
+  const has_next = idx < chunks.length - 1;
+  const has_prev = idx > 0;
+  return {
+    found: true,
+    type,
+    chunk: { index: idx, total: chunks.length, has_next, has_prev, text: chunks[idx] },
+    last_updated: row.updated_at
+  };
+}
+
+function splitSections(text) {
+  // Split by H2 headings to keep semantic sections
+  const raw = String(text || '');
+  const parts = raw.split(/\n##\s+/);
+  const out = [];
+  for (let i = 0; i < parts.length; i++) {
+    const block = parts[i];
+    if (!block.trim()) continue;
+    const firstLine = block.split('\n', 1)[0].trim();
+    const title = i === 0 && !raw.startsWith('## ') ? (firstLine.startsWith('#') ? firstLine.replace(/^#+\s*/, '') : '(intro)') : firstLine;
+    const body = i === 0 && !raw.startsWith('## ') ? block : block.slice(firstLine.length).trim();
+    out.push({ index: out.length, title, body });
+  }
+  return out;
+}
+
+function getPlanningDocSections(db, input) {
+  const { project_id, type } = input;
+  const row = db.prepare('SELECT content, updated_at FROM planning_docs WHERE project_id=? AND type=?').get(project_id, type);
+  if (!row) return { found: false };
+  const sections = splitSections(row.content || '');
+  return { found: true, type, sections: sections.map(s => ({ index: s.index, title: s.title })), last_updated: row.updated_at };
+}
+
+function getPlanningDocSection(db, input) {
+  const { project_id, type, index = 0 } = input;
+  const row = db.prepare('SELECT content, updated_at FROM planning_docs WHERE project_id=? AND type=?').get(project_id, type);
+  if (!row) return { found: false };
+  const sections = splitSections(row.content || '');
+  const idx = Math.min(Math.max(0, Number(index) || 0), Math.max(0, sections.length - 1));
+  const s = sections[idx] || { index: 0, title: '', body: '' };
+  const has_next = idx < sections.length - 1;
+  const has_prev = idx > 0;
+  return { found: true, type, section: { index: idx, title: s.title, body: s.body, has_next, has_prev }, last_updated: row.updated_at };
+}
+
 function updatePlanningDoc(db, input) {
   const { project_id, type, content, generate_summary, precondition_updated_at } = input;
   const id = `${project_id}:${type}`;

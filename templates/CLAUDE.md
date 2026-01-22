@@ -62,6 +62,7 @@ Canonical BMAD phases, startup routine, workflow runner usage, and exact tool ma
 ## Rules (Token Discipline)
 - Use `bmad.next_step` for current section only; avoid full‑file loads.
 - Prefer summaries (`bmad.get_planning_doc({ format:'summary' })`, `bmad.get_document({ format:'summary' })`) before fetching full content.
+- For long PRDs or docs, read in parts with `bmad.get_planning_doc_sections` + `bmad.get_planning_doc_section`, or chunked with `bmad.get_planning_doc_chunk({ chunk_index, chunk_size })`.
 - Persist via MCP set calls; do not write repo Markdown unless explicitly exporting.
 - In multi‑agent contexts, reserve tasks (`bmad.reserve_task`) and use `precondition_updated_at` on planning updates.
 - Question Gate (before readiness):

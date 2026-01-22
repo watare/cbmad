@@ -334,6 +334,7 @@ bmad-mcp register-project
 - Tasks: `bmad.complete_task`, `bmad.add_review_tasks`
 - Notes & Fichiers: `bmad.add_dev_note`, `bmad.register_files`, `bmad.add_changelog_entry`
 - Planning: `bmad.get_planning_doc`, `bmad.update_planning_doc`, `bmad.docNewVersion`, `bmad.getDocVersions`, `bmad.switchDocVersion`, `bmad.prd_new`, `bmad.get_prd_versions`, `bmad.switch_prd_version`, `bmad.product_brief_new`, `bmad.get_product_brief_versions`, `bmad.switch_product_brief_version`
+  - Long docs: `bmad.get_planning_doc_sections` + `bmad.get_planning_doc_section` (par sections H2), ou `bmad.get_planning_doc_chunk({ chunk_index, chunk_size })`.
 - Sprint: `bmad.get_sprint_status`, `bmad.log_action`, `bmad.set_current_sprint`, `bmad.sprint_planning_generate`
 - Export: `bmad.export_story_md`, `bmad.export_project_md`, `bmad.generate_pr`, `bmad.export_pr_md`
   - Docs export: `bmad.export_planning_doc` (single doc to md/html/pdf), `bmad.export_docs` (batch export)
