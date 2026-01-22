@@ -11,7 +11,9 @@
 
 # 1) Installer le serveur MCP (dans ce repo)
 npm install
-make install
+make install                 # PDF désactivé par défaut
+# Pour activer l'export PDF (installe puppeteer):
+# make install PDF=1
 bmad-mcp doctor
 
 # 2) Bootstrap projet (1 commande, recommandé)
@@ -182,6 +184,7 @@ Les deux approches respectent la séquence BMAD: Discovery → Planning → Solu
   - Sprint: `bmad.set_current_sprint`, `bmad.get_sprint_status`, génération plan: `bmad.sprint_planning_generate`.
   - Export humain: `bmad.export_story_md`, `bmad.generate_pr` + `bmad.export_pr_md`, `bmad.export_project_md`.
   - Docs export (MD/HTML/PDF): `bmad.export_planning_doc({ project_id, type, format:'md|html|pdf' })`, `bmad.export_docs({ project_id, types?, formats? })`.
+    - PDF dépendances: exécuter `make install PDF=1` (installe puppeteer), sinon utilisez MD/HTML.
 
 ### Orchestration et bootstrap
 - Classique: scripts manuels, prompts ad‑hoc, relecture de beaucoup de contexte.

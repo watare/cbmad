@@ -3,7 +3,7 @@ LOCALBIN ?= $(HOME)/.local/bin
 
 .PHONY: install install-local uninstall db-backup db-vacuum claude-md schema cli-link update-claude-md
 
-install: install-local claude-md schema cli-link
+install: install-local claude-md schema cli-link pdf-deps
 	@echo "BMAD MCP installed. Run: bmad-mcp doctor"
 
 install-local:
@@ -46,6 +46,16 @@ cli-link:
 	  echo 'Created $(LOCALBIN)/bmad-mcp'; \
 	else \
 	  echo 'Note: $(LOCALBIN) not found. Use npx or add a PATH shim manually.'; \
+	fi
+
+# Optional: install PDF export dependencies when PDF=1 (or BMAD_INSTALL_PDF=1)
+.PHONY: pdf-deps
+pdf-deps:
+	@if [ "$(PDF)" = "1" ] || [ "$(BMAD_INSTALL_PDF)" = "1" ]; then \
+	  echo 'Installing PDF export dependency: puppeteer'; \
+	  npm install --no-audit --no-fund puppeteer; \
+	else \
+	  echo 'Skip PDF deps (set PDF=1 to install puppeteer)'; \
 	fi
 
 uninstall:
