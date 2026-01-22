@@ -46,7 +46,12 @@ async function main() {
 
   const mcp = new McpServer({ name: 'bmad-mcp-server', version: '0.1.0' });
   const anyArgs = z.object({}).passthrough();
-  const wrap = (result) => ({ content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] });
+  const wrap = (result) => {
+    if (result && typeof result === 'object' && result.__format === 'markdown' && typeof result.markdown === 'string') {
+      return { content: [{ type: 'text', text: result.markdown }] };
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+  };
   // Guard against duplicate registrations (defensive in addition to SDK checks)
   const originalRegisterTool = mcp.registerTool.bind(mcp);
   const registeredTools = new Set();
@@ -82,6 +87,7 @@ async function main() {
 
   mcp.registerTool('bmad.get_project_context', { description: 'Get project summary context', inputSchema: anyArgs }, withDb((db, input) => tools.getProjectContext(db, input)));
   mcp.registerTool('bmad.get_project_status', { description: 'Composite project status (context + sprint + discovery + flags)', inputSchema: anyArgs }, withDb((db, input) => tools.getProjectStatus(db, input)));
+  mcp.registerTool('bmad.view_project_status_md', { description: 'Readable project status (markdown)', inputSchema: anyArgs }, withDb((db, input) => tools.viewProjectStatusMd(db, input)));
   mcp.registerTool('bmad.workflow_init', { description: 'Initialize project (register, sprint, docs, seed PRD/Arch/UX)', inputSchema: anyArgs }, withDb((db, input) => tools.workflowInit(db, input)));
   // BMAD-METHOD installer & runner
   mcp.registerTool('bmad.install_bmad_method', { description: 'Install BMAD-METHOD workflows into project', inputSchema: anyArgs }, withDb((db, input) => tools.installBmadMethod(db, input)));
@@ -161,6 +167,7 @@ async function main() {
 
   // Planning Documents
   mcp.registerTool('bmad.get_planning_doc', { description: 'Fetch planning doc', inputSchema: anyArgs }, withDb((db, input) => tools.getPlanningDoc(db, input)));
+  mcp.registerTool('bmad.view_planning_doc_md', { description: 'Readable planning doc (markdown, supports section/chunk)', inputSchema: anyArgs }, withDb((db, input) => tools.viewPlanningDocMd(db, input)));
   mcp.registerTool('bmad.get_planning_doc_chunk', { description: 'Fetch planning doc by chunk (index/size)', inputSchema: anyArgs }, withDb((db, input) => tools.getPlanningDocChunk(db, input)));
   mcp.registerTool('bmad.get_planning_doc_sections', { description: 'List planning doc sections (H2 titles)', inputSchema: anyArgs }, withDb((db, input) => tools.getPlanningDocSections(db, input)));
   mcp.registerTool('bmad.get_planning_doc_section', { description: 'Fetch one planning doc section by index', inputSchema: anyArgs }, withDb((db, input) => tools.getPlanningDocSection(db, input)));
@@ -175,6 +182,7 @@ async function main() {
 
   // Export
   mcp.registerTool('bmad.export_story_md', { description: 'Export a story to Markdown', inputSchema: anyArgs }, withDb((db, input) => tools.exportStoryMd(db, input, { exportDir })));
+  mcp.registerTool('bmad.view_story_md', { description: 'Readable story view (markdown)', inputSchema: anyArgs }, withDb((db, input) => tools.viewStoryMd(db, input)));
 
   mcp.registerTool('bmad.export_project_md', { description: 'Export the project to Markdown files', inputSchema: anyArgs }, withDb((db, input) => tools.exportProjectMd(db, input, { exportDir })));
   mcp.registerTool('bmad.export_pr_md', { description: 'Export a PR markdown for a story', inputSchema: anyArgs }, withDb((db, input) => tools.exportPrMd(db, input, { exportDir })));

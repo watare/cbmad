@@ -335,9 +335,12 @@ bmad-mcp register-project
 - Notes & Fichiers: `bmad.add_dev_note`, `bmad.register_files`, `bmad.add_changelog_entry`
 - Planning: `bmad.get_planning_doc`, `bmad.update_planning_doc`, `bmad.docNewVersion`, `bmad.getDocVersions`, `bmad.switchDocVersion`, `bmad.prd_new`, `bmad.get_prd_versions`, `bmad.switch_prd_version`, `bmad.product_brief_new`, `bmad.get_product_brief_versions`, `bmad.switch_product_brief_version`
   - Long docs: `bmad.get_planning_doc_sections` + `bmad.get_planning_doc_section` (par sections H2), ou `bmad.get_planning_doc_chunk({ chunk_index, chunk_size })`.
+  - Vues lisibles (Markdown): `bmad.view_planning_doc_md({ project_id, type, section_index? | chunk_index? })`.
 - Sprint: `bmad.get_sprint_status`, `bmad.log_action`, `bmad.set_current_sprint`, `bmad.sprint_planning_generate`
+  - Vues lisibles: `bmad.view_project_status_md()`.
 - Export: `bmad.export_story_md`, `bmad.export_project_md`, `bmad.generate_pr`, `bmad.export_pr_md`
   - Docs export: `bmad.export_planning_doc` (single doc to md/html/pdf), `bmad.export_docs` (batch export)
+  - Vues lisibles: `bmad.view_story_md({ story_id })`
 - Import: `bmad.import_project`
 - Review: `bmad.start_review`, `bmad.add_review_finding`, `bmad.close_review`, `bmad.get_review_backlog`, `bmad.complete_review_item`, `bmad.bulk_complete_review`
 - Réservations: `bmad.reserve_task`, `bmad.release_task`, `bmad.get_reservations`

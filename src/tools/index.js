@@ -2151,3 +2151,51 @@ function recommendPhaseGates(db, input) {
 module.exports.listPhaseGates = listPhaseGates;
 module.exports.setPhaseGate = setPhaseGate;
 module.exports.recommendPhaseGates = recommendPhaseGates;
+
+// ---------- Readable Views (Markdown) ----------
+function viewPlanningDocMd(db, input) {
+  const { project_id, type, section_index, chunk_index, chunk_size, title } = input;
+  if (section_index != null) {
+    const s = getPlanningDocSection(db, { project_id, type, index: section_index });
+    if (!s.found) return { __format: 'markdown', markdown: `# ${type.toUpperCase()} — Section not found` };
+    const head = `# ${title || type.toUpperCase()} — ${s.section.title}`;
+    return { __format: 'markdown', markdown: `${head}\n\n${s.section.body}` };
+  }
+  if (chunk_index != null) {
+    const c = getPlanningDocChunk(db, { project_id, type, chunk_index, chunk_size });
+    if (!c.found) return { __format: 'markdown', markdown: `# ${type.toUpperCase()} — Chunk not found` };
+    const head = `# ${title || type.toUpperCase()} — Chunk ${c.chunk.index + 1}/${c.chunk.total}`;
+    return { __format: 'markdown', markdown: `${head}\n\n${c.chunk.text}` };
+  }
+  const row = db.prepare('SELECT content FROM planning_docs WHERE project_id=? AND type=?').get(project_id, type);
+  const head = `# ${title || type.toUpperCase()}`;
+  return { __format: 'markdown', markdown: `${head}\n\n${(row?.content || '')}` };
+}
+
+function viewStoryMd(db, input) {
+  const { story_id } = input;
+  const md = renderStoryMarkdown(db, story_id);
+  return { __format: 'markdown', markdown: md };
+}
+
+function viewProjectStatusMd(db, input) {
+  const { project_id } = input;
+  const st = getProjectStatus(db, { project_id });
+  if (!st.found) return { __format: 'markdown', markdown: `# Project ${project_id}\n\n_Not found_` };
+  const lines = [];
+  lines.push(`# Project ${st.project.name} (${st.project.id})`);
+  lines.push('');
+  lines.push(`- Sprint: ${st.summary.current_sprint || 'n/a'}`);
+  lines.push(`- Epics: ${st.summary.counts.epics} | Stories: ${st.summary.counts.stories}`);
+  lines.push('- Stories by status:');
+  for (const [k,v] of Object.entries(st.summary.stories_by_status || {})) lines.push(`  - ${k}: ${v}`);
+  if (st.phase_gates?.by_status) {
+    lines.push('- Gates:');
+    for (const [k,v] of Object.entries(st.phase_gates.by_status)) lines.push(`  - ${k}: ${v}`);
+  }
+  return { __format: 'markdown', markdown: lines.join('\n') };
+}
+
+module.exports.viewPlanningDocMd = viewPlanningDocMd;
+module.exports.viewStoryMd = viewStoryMd;
+module.exports.viewProjectStatusMd = viewProjectStatusMd;
