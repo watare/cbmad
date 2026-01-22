@@ -102,6 +102,19 @@ function migrate(db) {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(project_id, type, version)
     )`,
+    `CREATE TABLE IF NOT EXISTS story_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      title TEXT,
+      description TEXT,
+      status TEXT,
+      acceptance_criteria JSON,
+      dev_notes TEXT,
+      tasks_snapshot JSON,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(story_id, version)
+    )`,
     `CREATE TABLE IF NOT EXISTS documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id TEXT NOT NULL REFERENCES projects(id),

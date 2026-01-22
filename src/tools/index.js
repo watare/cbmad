@@ -615,6 +615,9 @@ function deleteStory(db, input) {
   if (cnt > 0 && !force) {
     return { success: false, error: 'incomplete-tasks' };
   }
+  // Clean references that do not cascade
+  db.prepare('UPDATE bugs SET story_id=NULL WHERE story_id=?').run(story_id);
+  db.prepare('DELETE FROM reservations WHERE story_id=?').run(story_id);
   db.prepare('DELETE FROM stories WHERE id=?').run(story_id);
   return { success: true };
 }
@@ -1085,3 +1088,82 @@ module.exports.updateTestCase = updateTestCase;
 module.exports.recordTestRun = recordTestRun;
 module.exports.recordTestResult = recordTestResult;
 module.exports.getTestCoverage = getTestCoverage;
+
+// ---------- Planning Docs generic versioning (arch, ux, epics-doc) ----------
+function docNewVersion(db, input) {
+  const { project_id, type, version, content } = input; // type: 'architecture' | 'ux' | 'epics'
+  const summary = summarize(content, 1200);
+  db.prepare('INSERT INTO planning_doc_versions (project_id, type, version, content, summary) VALUES (?,?,?,?,?)')
+    .run(project_id, type, version, content, summary);
+  const id = `${project_id}:${type}`;
+  db.prepare(`INSERT INTO planning_docs (id, project_id, type, content, summary)
+              VALUES (?,?,?,?,?)
+              ON CONFLICT(id) DO UPDATE SET content=excluded.content, summary=excluded.summary, updated_at=CURRENT_TIMESTAMP`)
+    .run(id, project_id, type, content, summary);
+  return { success: true };
+}
+
+function getDocVersions(db, input) {
+  const { project_id, type } = input;
+  const rows = db.prepare('SELECT version, created_at FROM planning_doc_versions WHERE project_id=? AND type=? ORDER BY id DESC').all(project_id, type);
+  return { versions: rows };
+}
+
+function switchDocVersion(db, input) {
+  const { project_id, type, version } = input;
+  const row = db.prepare('SELECT content, summary FROM planning_doc_versions WHERE project_id=? AND type=? AND version=?').get(project_id, type, version);
+  if (!row) throw new Error('Version not found');
+  const id = `${project_id}:${type}`;
+  db.prepare(`INSERT INTO planning_docs (id, project_id, type, content, summary)
+              VALUES (?,?,?,?,?)
+              ON CONFLICT(id) DO UPDATE SET content=excluded.content, summary=excluded.summary, updated_at=CURRENT_TIMESTAMP`)
+    .run(id, project_id, type, row.content, row.summary);
+  return { success: true };
+}
+
+// ---------- Story Snapshots (with tasks) ----------
+function storySnapshot(db, input) {
+  const { story_id, version } = input;
+  const s = db.prepare('SELECT id, title, description, status, acceptance_criteria, dev_notes FROM stories WHERE id=?').get(story_id);
+  if (!s) throw new Error('Story not found');
+  const roots = db.prepare('SELECT id, idx, description, done FROM tasks WHERE story_id=? AND parent_task_id IS NULL ORDER BY idx ASC').all(story_id);
+  const subs = db.prepare('SELECT parent_task_id, idx, description, done FROM tasks WHERE story_id=? AND parent_task_id IS NOT NULL ORDER BY parent_task_id, idx ASC').all(story_id);
+  const byParent = subs.reduce((a, r) => { (a[r.parent_task_id] ||= []).push(r); return a; }, {});
+  const snap = roots.map(r => ({ idx: r.idx, description: r.description, done: !!r.done, subtasks: (byParent[r.id]||[]).map(x=>({ idx:x.idx, description:x.description, done:!!x.done })) }));
+  db.prepare('INSERT OR REPLACE INTO story_versions (story_id, version, title, description, status, acceptance_criteria, dev_notes, tasks_snapshot) VALUES (?,?,?,?,?,?,?,?)')
+    .run(story_id, version, s.title, s.description || null, s.status, s.acceptance_criteria || '[]', s.dev_notes || null, JSON.stringify(snap));
+  return { success: true };
+}
+
+function getStoryVersions(db, input) {
+  const { story_id } = input;
+  const rows = db.prepare('SELECT version, created_at FROM story_versions WHERE story_id=? ORDER BY id DESC').all(story_id);
+  return { versions: rows };
+}
+
+function switchStoryVersion(db, input) {
+  const { story_id, version } = input;
+  const v = db.prepare('SELECT title, description, status, acceptance_criteria, dev_notes, tasks_snapshot FROM story_versions WHERE story_id=? AND version=?').get(story_id, version);
+  if (!v) throw new Error('Version not found');
+  db.prepare('UPDATE stories SET title=?, description=?, status=?, acceptance_criteria=?, dev_notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+    .run(v.title || null, v.description || null, v.status || 'draft', v.acceptance_criteria || '[]', v.dev_notes || null, story_id);
+  // Replace tasks from snapshot
+  const del = db.prepare('DELETE FROM tasks WHERE story_id=?');
+  del.run(story_id);
+  const roots = JSON.parse(v.tasks_snapshot || '[]');
+  const insRoot = db.prepare('INSERT INTO tasks (story_id, idx, description, done) VALUES (?,?,?,?)');
+  const insSub = db.prepare('INSERT INTO tasks (story_id, parent_task_id, idx, description, done) VALUES (?,?,?,?,?)');
+  for (const r of roots) {
+    const res = insRoot.run(story_id, r.idx, r.description, r.done ? 1 : 0);
+    const parentId = res.lastInsertRowid;
+    for (const st of (r.subtasks || [])) insSub.run(story_id, parentId, st.idx, st.description, st.done ? 1 : 0);
+  }
+  return { success: true };
+}
+
+module.exports.docNewVersion = docNewVersion;
+module.exports.getDocVersions = getDocVersions;
+module.exports.switchDocVersion = switchDocVersion;
+module.exports.storySnapshot = storySnapshot;
+module.exports.getStoryVersions = getStoryVersions;
+module.exports.switchStoryVersion = switchStoryVersion;

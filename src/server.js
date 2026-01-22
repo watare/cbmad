@@ -168,6 +168,17 @@ async function main() {
   mcp.registerTool('bmad.record_test_run', { description: 'Record a test run', inputSchema: anyArgs }, withDb((db, input) => tools.recordTestRun(db, input)));
   mcp.registerTool('bmad.record_test_result', { description: 'Record a test result', inputSchema: anyArgs }, withDb((db, input) => tools.recordTestResult(db, input)));
   mcp.registerTool('bmad.get_test_coverage', { description: 'Get test coverage summary for a plan', inputSchema: anyArgs }, withDb((db, input) => tools.getTestCoverage(db, input)));
+  // Planning docs other types
+  mcp.registerTool('bmad.arch_new', { description: 'New architecture doc version', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'architecture' })));
+  mcp.registerTool('bmad.get_arch_versions', { description: 'List architecture versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'architecture' })));
+  mcp.registerTool('bmad.switch_arch_version', { description: 'Switch architecture to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'architecture' })));
+  mcp.registerTool('bmad.ux_new', { description: 'New UX doc version', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'ux' })));
+  mcp.registerTool('bmad.get_ux_versions', { description: 'List UX versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'ux' })));
+  mcp.registerTool('bmad.switch_ux_version', { description: 'Switch UX to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'ux' })));
+  // Story versions
+  mcp.registerTool('bmad.story_snapshot', { description: 'Snapshot a story (with tasks)', inputSchema: anyArgs }, withDb((db, input) => tools.storySnapshot(db, input)));
+  mcp.registerTool('bmad.get_story_versions', { description: 'List story snapshots', inputSchema: anyArgs }, withDb((db, input) => tools.getStoryVersions(db, input)));
+  mcp.registerTool('bmad.switch_story_version', { description: 'Switch story to a snapshot', inputSchema: anyArgs }, withDb((db, input) => tools.switchStoryVersion(db, input)));
   // Review fix
   mcp.registerTool('bmad.get_review_backlog', { description: 'List pending review follow-up items', inputSchema: anyArgs }, withDb((db, input) => tools.getReviewBacklog(db, input)));
   mcp.registerTool('bmad.complete_review_item', { description: 'Complete a review follow-up item', inputSchema: anyArgs }, withDb((db, input) => tools.completeReviewItem(db, input)));
