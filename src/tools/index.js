@@ -1470,6 +1470,7 @@ function getProjectStatus(db, input) {
   const prd = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='prd'").get(project_id);
   const arch = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='architecture'").get(project_id);
   const ux = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='ux'").get(project_id);
+  const brief = db.prepare("SELECT id FROM planning_docs WHERE project_id=? AND type='product_brief'").get(project_id);
   return {
     found: true,
     project: { id: proj.id, name: proj.name, root_path: proj.root_path, config: cfg },
@@ -1479,7 +1480,7 @@ function getProjectStatus(db, input) {
       stories_by_status: byStatus
     },
     discovery: { recent_sessions: sessions },
-    planning_flags: { has_prd: !!prd, has_architecture: !!arch, has_ux: !!ux }
+    planning_flags: { has_prd: !!prd, has_architecture: !!arch, has_ux: !!ux, has_product_brief: !!brief }
   };
 }
 
@@ -1559,6 +1560,7 @@ function workflowInit(db, input) {
   if (seed.prd) { updatePlanningDoc(db, { project_id, type: 'prd', content: seed.prd, generate_summary: true }); actions.push('prd_seeded'); }
   if (seed.architecture) { updatePlanningDoc(db, { project_id, type: 'architecture', content: seed.architecture, generate_summary: true }); actions.push('arch_seeded'); }
   if (seed.ux) { updatePlanningDoc(db, { project_id, type: 'ux', content: seed.ux, generate_summary: true }); actions.push('ux_seeded'); }
+  if (seed.product_brief) { updatePlanningDoc(db, { project_id, type: 'product_brief', content: seed.product_brief, generate_summary: true }); actions.push('product_brief_seeded'); }
   const status = getProjectStatus(db, { project_id });
   return { success: true, actions, status };
 }

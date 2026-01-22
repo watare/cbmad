@@ -150,6 +150,10 @@ Les deux approches respectent la séquence BMAD: Discovery → Planning → Solu
   - `bmad.update_planning_doc` pour persister: `type: prd | architecture | ux` avec `precondition_updated_at` (optimistic locking).
   - Versioning PRD: `bmad.prd_new`, `bmad.get_prd_versions`, `bmad.switch_prd_version` (idem génériques: `docNewVersion/switchDocVersion`).
   - UX review: `bmad.start_ux_review`, `bmad.approve_ux_review`/`bmad.reject_ux_review`, `bmad.list_ux_reviews`.
+  - Étapes optionnelles: Product Brief (synthèse).
+    - Fichier workflow (classic): `_bmad/bmm/workflows/1-analysis/create-product-brief/workflow.md`.
+    - Persistance MCP: `bmad.update_planning_doc({ type: 'product_brief' })`.
+    - Versioning MCP: `bmad.product_brief_new`, `bmad.get_product_brief_versions`, `bmad.switch_product_brief_version`.
 
 ### Solutioning (Epics/Stories/Readiness)
 - Classique:
@@ -312,7 +316,7 @@ bmad-mcp register-project
 - Story: `bmad.get_next_story`, `bmad.get_story_context`, `bmad.get_story_summary`, `bmad.create_story`, `bmad.update_story_status`, `bmad.update_story`, `bmad.delete_story`, `bmad.story_snapshot`, `bmad.get_story_versions`, `bmad.switch_story_version`
 - Tasks: `bmad.complete_task`, `bmad.add_review_tasks`
 - Notes & Fichiers: `bmad.add_dev_note`, `bmad.register_files`, `bmad.add_changelog_entry`
-- Planning: `bmad.get_planning_doc`, `bmad.update_planning_doc`, `bmad.docNewVersion`, `bmad.getDocVersions`, `bmad.switchDocVersion`, `bmad.prd_new`, `bmad.get_prd_versions`, `bmad.switch_prd_version`
+- Planning: `bmad.get_planning_doc`, `bmad.update_planning_doc`, `bmad.docNewVersion`, `bmad.getDocVersions`, `bmad.switchDocVersion`, `bmad.prd_new`, `bmad.get_prd_versions`, `bmad.switch_prd_version`, `bmad.product_brief_new`, `bmad.get_product_brief_versions`, `bmad.switch_product_brief_version`
 - Sprint: `bmad.get_sprint_status`, `bmad.log_action`, `bmad.set_current_sprint`, `bmad.sprint_planning_generate`
 - Export: `bmad.export_story_md`, `bmad.export_project_md`, `bmad.generate_pr`, `bmad.export_pr_md`
 - Import: `bmad.import_project`

@@ -212,6 +212,10 @@ async function main() {
   mcp.registerTool('bmad.prd_new', { description: 'Create a new PRD version and set current', inputSchema: anyArgs }, withDb((db, input) => tools.prdNew(db, input)));
   mcp.registerTool('bmad.get_prd_versions', { description: 'List PRD versions', inputSchema: anyArgs }, withDb((db, input) => tools.getPrdVersions(db, input)));
   mcp.registerTool('bmad.switch_prd_version', { description: 'Switch current PRD to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchPrdVersion(db, input)));
+  // Product Brief (optional) versioning
+  mcp.registerTool('bmad.product_brief_new', { description: 'Create a new Product Brief version and set current', inputSchema: anyArgs }, withDb((db, input) => tools.docNewVersion(db, { ...input, type: 'product_brief' })));
+  mcp.registerTool('bmad.get_product_brief_versions', { description: 'List Product Brief versions', inputSchema: anyArgs }, withDb((db, input) => tools.getDocVersions(db, { ...input, type: 'product_brief' })));
+  mcp.registerTool('bmad.switch_product_brief_version', { description: 'Switch Product Brief to a version', inputSchema: anyArgs }, withDb((db, input) => tools.switchDocVersion(db, { ...input, type: 'product_brief' })));
   // Epics versioning
   mcp.registerTool('bmad.epic_new_version', { description: 'Create a new epic version', inputSchema: anyArgs }, withDb((db, input) => tools.epicNewVersion(db, input)));
   mcp.registerTool('bmad.get_epic_versions', { description: 'List epic versions', inputSchema: anyArgs }, withDb((db, input) => tools.getEpicVersions(db, input)));
