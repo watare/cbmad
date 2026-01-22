@@ -172,6 +172,9 @@ async function main() {
   mcp.registerTool('bmad.export_project_md', { description: 'Export the project to Markdown files', inputSchema: anyArgs }, withDb((db, input) => tools.exportProjectMd(db, input, { exportDir })));
   mcp.registerTool('bmad.export_pr_md', { description: 'Export a PR markdown for a story', inputSchema: anyArgs }, withDb((db, input) => tools.exportPrMd(db, input, { exportDir })));
   mcp.registerTool('bmad.generate_pr', { description: 'Generate PR title/body for a story', inputSchema: anyArgs }, withDb((db, input) => tools.generatePr(db, input)));
+  // Planning docs export (MD/HTML/PDF)
+  mcp.registerTool('bmad.export_planning_doc', { description: 'Export a planning doc to md/html/pdf', inputSchema: anyArgs }, withDb((db, input) => tools.exportPlanningDoc(db, input, { exportDir })));
+  mcp.registerTool('bmad.export_docs', { description: 'Export multiple planning docs to requested formats', inputSchema: anyArgs }, withDb((db, input) => tools.exportDocs(db, input, { exportDir })));
   mcp.registerTool('bmad.save_workflow_output', { description: 'Save generic output of a workflow step into documents', inputSchema: anyArgs }, withDb((db, input) => tools.saveWorkflowOutput(db, input)));
 
   // Import

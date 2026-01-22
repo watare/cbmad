@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 function nowIso() { return new Date().toISOString(); }
 
@@ -1841,3 +1842,89 @@ function saveWorkflowOutput(db, input) {
   return { success: true, path: relPath };
 }
 module.exports.saveWorkflowOutput = saveWorkflowOutput;
+
+// ---------- Exports: Planning Docs to MD/HTML/PDF ----------
+function preprocessMermaid(markdown) {
+  return (markdown || '').replace(/```mermaid\n([\s\S]*?)```/g, (m, code) => `\n<div class=\"mermaid\">\n${code}\n</div>\n`);
+}
+
+function renderMarkdownHtml(title, markdown) {
+  const pre = preprocessMermaid(markdown || '');
+  let bodyHtml = '';
+  try {
+    const MarkdownIt = require('markdown-it');
+    const md = new MarkdownIt({ html: true, linkify: true, typographer: true });
+    bodyHtml = md.render(pre);
+  } catch (e) {
+    bodyHtml = `<pre>${(pre || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+  }
+  const html = `<!doctype html>\n<html>\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n  <title>${title || 'Document'}</title>\n  <style>\n    body { max-width: 860px; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; line-height: 1.55; }\n    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; }\n    table { border-collapse: collapse; }\n    table, th, td { border: 1px solid #ccc; }\n    th, td { padding: 6px 10px; }\n    h1,h2,h3 { line-height: 1.25; }\n  </style>\n  <script>\n    window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\(', '\\\)']] } };\n  </script>\n  <script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js\" async></script>\n  <script src=\"https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js\"></script>\n  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>\n</head>\n<body>\n${bodyHtml}\n</body>\n</html>`;
+  return html;
+}
+
+function exportPlanningDoc(db, input, { exportDir }) {
+  const { project_id, type, format = 'md', output_path, title } = input;
+  const row = db.prepare('SELECT content FROM planning_docs WHERE project_id=? AND type=?').get(project_id, type);
+  if (!row) throw new Error('Planning doc not found');
+  const proj = db.prepare('SELECT root_path FROM projects WHERE id=?').get(project_id);
+  const baseDefault = proj?.root_path ? path.join(proj.root_path, '_bmad-output', 'planning') : path.join(exportDir, project_id, 'planning');
+  const outPath = output_path || path.join(baseDefault, `${type}.${format}`);
+  ensureDir(path.dirname(outPath));
+  if (format === 'md') {
+    fs.writeFileSync(outPath, row.content || '', 'utf8');
+    return { success: true, path: outPath };
+  }
+  if (format === 'html') {
+    const html = renderMarkdownHtml(title || type.toUpperCase(), row.content || '');
+    fs.writeFileSync(outPath, html, 'utf8');
+    return { success: true, path: outPath };
+  }
+  if (format === 'pdf') {
+    const html = renderMarkdownHtml(title || type.toUpperCase(), row.content || '');
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir?.() || '/tmp', 'bmad-html-'));
+    const tmpHtml = path.join(tmpDir, `${type}.html`);
+    fs.writeFileSync(tmpHtml, html, 'utf8');
+    try {
+      const puppeteer = require('puppeteer');
+      return (async () => {
+        const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+        const page = await browser.newPage();
+        await page.goto('file://' + tmpHtml, { waitUntil: 'networkidle0' });
+        const waitMs = Number(process.env.BMAD_PDF_RENDER_WAIT_MS || 1200);
+        await page.waitForTimeout(waitMs);
+        await page.pdf({ path: outPath, format: 'A4', printBackground: true });
+        await browser.close();
+        return { success: true, path: outPath };
+      })();
+    } catch (e) {
+      return { success: false, error: 'pdf-deps-missing', detail: 'Install puppeteer to enable PDF export', suggested_command: 'npm i puppeteer' };
+    }
+  }
+  throw new Error('Unsupported format: ' + format);
+}
+
+function exportDocs(db, input, { exportDir }) {
+  const { project_id, types, formats = ['md'] } = input;
+  const rows = db.prepare('SELECT type FROM planning_docs WHERE project_id=?').all(project_id);
+  const allTypes = rows.map(r => r.type);
+  const chosen = Array.isArray(types) && types.length ? types : allTypes;
+  const results = [];
+  for (const t of chosen) {
+    for (const f of (formats || ['md'])) {
+      try {
+        const r = exportPlanningDoc(db, { project_id, type: t, format: f }, { exportDir });
+        if (r && typeof r.then === 'function') {
+          results.push({ type: t, format: f, ok: true, path: '(pdf-in-progress)' });
+        } else {
+          results.push({ type: t, format: f, ok: !!r.success, path: r.path || null, error: r.error || null });
+        }
+      } catch (e) {
+        results.push({ type: t, format: f, ok: false, error: String(e && e.message || e) });
+      }
+    }
+  }
+  return { success: true, results };
+}
+
+module.exports.exportPlanningDoc = exportPlanningDoc;
+module.exports.exportDocs = exportDocs;

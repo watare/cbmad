@@ -181,6 +181,7 @@ Les deux approches respectent la séquence BMAD: Discovery → Planning → Solu
   - Revue: `bmad.start_review`, `bmad.add_review_finding`, `bmad.close_review`, suivi `bmad.get_review_backlog` + rattrapage via `bmad.add_review_tasks`/`bmad.complete_review_item`/`bmad.bulk_complete_review`.
   - Sprint: `bmad.set_current_sprint`, `bmad.get_sprint_status`, génération plan: `bmad.sprint_planning_generate`.
   - Export humain: `bmad.export_story_md`, `bmad.generate_pr` + `bmad.export_pr_md`, `bmad.export_project_md`.
+  - Docs export (MD/HTML/PDF): `bmad.export_planning_doc({ project_id, type, format:'md|html|pdf' })`, `bmad.export_docs({ project_id, types?, formats? })`.
 
 ### Orchestration et bootstrap
 - Classique: scripts manuels, prompts ad‑hoc, relecture de beaucoup de contexte.
@@ -330,6 +331,7 @@ bmad-mcp register-project
 - Planning: `bmad.get_planning_doc`, `bmad.update_planning_doc`, `bmad.docNewVersion`, `bmad.getDocVersions`, `bmad.switchDocVersion`, `bmad.prd_new`, `bmad.get_prd_versions`, `bmad.switch_prd_version`, `bmad.product_brief_new`, `bmad.get_product_brief_versions`, `bmad.switch_product_brief_version`
 - Sprint: `bmad.get_sprint_status`, `bmad.log_action`, `bmad.set_current_sprint`, `bmad.sprint_planning_generate`
 - Export: `bmad.export_story_md`, `bmad.export_project_md`, `bmad.generate_pr`, `bmad.export_pr_md`
+  - Docs export: `bmad.export_planning_doc` (single doc to md/html/pdf), `bmad.export_docs` (batch export)
 - Import: `bmad.import_project`
 - Review: `bmad.start_review`, `bmad.add_review_finding`, `bmad.close_review`, `bmad.get_review_backlog`, `bmad.complete_review_item`, `bmad.bulk_complete_review`
 - Réservations: `bmad.reserve_task`, `bmad.release_task`, `bmad.get_reservations`
@@ -400,3 +402,7 @@ Note: Le mapping complet est disponible dynamiquement via `bmad.generate_workflo
   - Logs: `_bmad-output/logs/logs.md`.
 - Idempotence: l’import crée l’entrée `projects` si manquante et évite les doublons évidents.
 - Après import: consultez `bmad.get_project_status` pour voir `planning_flags` et `counts` mis à jour.
+- Exporter un document (MD/HTML/PDF)
+  - Unitaire: `bmad.export_planning_doc({ project_id, type: 'prd', format: 'pdf' })`
+  - Batch: `bmad.export_docs({ project_id, types: ['prd','architecture','ux'], formats: ['md','pdf'] })`
+  - Rendu Formules/Diagrammes: export HTML embarque MathJax et Mermaid; PDF nécessite `puppeteer` installé côté serveur MCP.
